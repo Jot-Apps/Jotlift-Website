@@ -111,10 +111,26 @@ node tools/domain.test.mjs
 
 ## Changing the app-store link
 
-Jotlift is on TestFlight and has no public store listing yet, so every "Get the
-app" and "Subscribe in the app" button falls back to the How it works page. Set
-`APP_STORE_URL` in `assets/js/app-link.js` and every one of them follows it.
-That is the only change needed.
+Every "Get the app" and "Subscribe in the app" button points at the App Store
+listing:
+
+```
+https://apps.apple.com/us/app/jotlift-workout-log/id6780453950
+```
+
+It lives in `assets/js/app-link.js` as `APP_STORE_URL`, and as a plain `href`
+on each of the buttons, because every public page has to work with JavaScript
+turned off. `applyAppLink()` re-asserts it on load, which is also what points
+the button the dashboard renders at runtime.
+
+If the listing ever moves, change `APP_STORE_URL` and the `href` on each
+`[data-app-link]` button, then run:
+
+```
+node tools/app-link.test.mjs
+```
+
+which fails if any of them disagree, with JavaScript on and with it off.
 
 ## Voice
 

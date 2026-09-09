@@ -1,18 +1,18 @@
 /* Where "Get the app" and "Subscribe in the app" point.
  *
- * THE ONE PLACE TO CHANGE WHEN THE APP STORE LISTING GOES LIVE. Jotlift is on
- * TestFlight today and has no public store URL, so every one of those buttons
- * falls back to the How it works page, which explains what the app is and what
- * Pro adds. That is a real destination rather than a dead link or a button that
- * does nothing.
+ * THE ONE PLACE TO CHANGE IF THE STORE LISTING EVER MOVES. Jotlift is live on
+ * the App Store, so every one of those buttons goes straight to the listing.
  *
- * Set APP_STORE_URL to the listing and every button on every page follows it.
- * Nothing else needs touching.
+ * The static pages carry this URL as a plain href, because every public page
+ * has to work with JavaScript turned off. This module is what keeps the
+ * buttons the dashboard renders at runtime pointing at the same place, and it
+ * re-asserts the href on the static ones so a page and this file can never
+ * drift apart unnoticed. `tools/app-link.test.mjs` checks both.
  */
 
-export const APP_STORE_URL = null;
+export const APP_STORE_URL = 'https://apps.apple.com/us/app/jotlift-workout-log/id6780453950';
 
-/** Point every app-store button at the listing, once there is one. */
+/** Point every app-store button at the listing. */
 export function applyAppLink() {
   if (!APP_STORE_URL) return;
   for (const link of document.querySelectorAll('[data-app-link]')) {

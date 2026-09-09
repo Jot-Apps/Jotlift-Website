@@ -19,7 +19,7 @@
 // which aborts this one before a single line below it runs. See frame-guard.js.
 import './frame-guard.js';
 import { initTheme } from '../theme.js';
-import { applyAppLink } from '../app-link.js';
+import { APP_STORE_URL, applyAppLink } from '../app-link.js';
 import { icon } from '../icons.js';
 import * as api from './api.js';
 import { materialise, buildModel } from './store.js';
@@ -329,7 +329,7 @@ function upgrade() {
           </div>
         </div>
         <div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
-          <a class="btn btn--lg" href="/how-it-works/#get-the-app" data-app-link>Subscribe in the app</a>
+          <a class="btn btn--lg" href="${APP_STORE_URL}" rel="noopener" data-app-link>Subscribe in the app</a>
           <span style="font-size:15px" class="quiet">${esc(fmt(row, row[2]))} a month or ${esc(fmt(row, row[3]))} a year</span>
         </div>
         <p style="margin:16px 0 0;font-size:14px" class="decorative">Subscriptions are billed by your app store. No free trial.</p>
