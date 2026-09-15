@@ -38,15 +38,21 @@ assets/css/site.css  the design system realised as classes
 assets/js/           theme, icons, prices, the hero walk
 assets/js/dashboard/ the signed-in surface
 assets/img/screens/  eight real app captures (1206x2622), light and dark
-data/                the two App Store Connect price exports
+data/                the store price snapshot (store-prices.json)
 tools/                the checks: domain rules, the relay, the page guards
 ```
 
 ## Pricing
 
-`data/price-monthly.csv` and `data/price-yearly.csv` are the App Store Connect
-exports and are the source of truth. They are compiled into `ROWS` in
-`assets/js/prices.js`, which has been diffed against them row by row.
+`data/store-prices.json` is the source of truth: the three Pro plans (weekly,
+monthly, yearly) per storefront, read from App Store Connect through RevenueCat's
+product store state. It is compiled into `ROWS` in `assets/js/prices.js`, and
+`tools/domain.test.mjs` fails if any row disagrees with it. When a price changes
+in App Store Connect, re-read the store state, update the JSON, then the table.
+
+The yearly plan carries a 14-day free trial. The site states it in one place,
+`TRIAL_DAYS` in `prices.js`, and the per-week figure uses the app's own rule
+(52 weeks a year, whole minor units, rounded up).
 
 The picker lists the **66 storefronts that price in their own currency, plus the
 United States** (USD is its own currency): 67 rows. The other 108 of the 175 are

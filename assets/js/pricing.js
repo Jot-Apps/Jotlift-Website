@@ -8,10 +8,12 @@ import {
   savedCountry,
   saveCountry,
   fmt,
-  usdMonthly,
-  usdYearly,
-  yearlyPerMonth,
-  savePercent,
+  planPrice,
+  perWeek,
+  PLAN_PER,
+  TRIAL_DAYS,
+  TRIAL_PLAN,
+  usdFromText,
 } from './prices.js';
 
 initTheme();
@@ -33,28 +35,39 @@ const el = {
   amount: document.querySelector('[data-price-amount]'),
   per: document.querySelector('[data-price-per]'),
   note: document.querySelector('[data-price-note]'),
+  trial: document.querySelector('[data-price-trial]'),
+  terms: document.querySelector('[data-price-terms]'),
 };
 
-document.querySelector('[data-usd-monthly]').textContent = usdMonthly;
-document.querySelector('[data-usd-yearly]').textContent = usdYearly;
+document.querySelector('[data-usd-from]').textContent = usdFromText;
 
 function renderPrices() {
   const row = priceRow(state.country);
-  const yearly = state.plan === 'yearly';
-  const save = savePercent(row);
+  const plan = state.plan;
+  const price = planPrice(row, plan);
+  const trial = plan === TRIAL_PLAN;
 
   el.name.textContent = row[0];
   el.code.textContent = row[1];
   el.echo.textContent = row[0];
   el.free.textContent = fmt(row, 0);
-  el.amount.textContent = fmt(row, yearly ? row[3] : row[2]);
-  el.per.textContent = yearly ? 'a year' : 'a month';
-  el.note.textContent = yearly
-    ? `Works out to ${fmt(row, yearlyPerMonth(row))} a month, ${save}% less than paying monthly.`
-    : `${fmt(row, row[3])} a year works out ${save}% cheaper.`;
+  el.amount.textContent = fmt(row, price);
+  el.per.textContent = PLAN_PER[plan];
+  // The same comparison the paywall draws: every plan per week, except weekly,
+  // where the per-week figure IS the price.
+  el.note.textContent =
+    plan === 'weekly' ? 'Billed every week.' : `About ${fmt(row, perWeek(row, plan))} a week.`;
+  // The trial pill and its terms belong to the yearly plan only.
+  el.trial.firstElementChild.textContent = `${TRIAL_DAYS} days free`;
+  el.trial.classList.toggle('is-off', !trial);
+  el.trial.setAttribute('aria-hidden', String(!trial));
+  // Keeps the yearly wording when hidden, so the line holds the same height.
+  el.terms.textContent = `Free for ${TRIAL_DAYS} days, then ${fmt(row, planPrice(row, TRIAL_PLAN))} a year. New subscribers only.`;
+  el.terms.classList.toggle('is-off', !trial);
+  el.terms.setAttribute('aria-hidden', String(!trial));
 
   el.planButtons.forEach((b) =>
-    b.setAttribute('aria-pressed', String(b.dataset.plan === state.plan)),
+    b.setAttribute('aria-pressed', String(b.dataset.plan === plan)),
   );
 }
 
