@@ -25,7 +25,18 @@ import {
   durationText,
   weekStart,
 } from '../assets/js/dashboard/domain.js';
-import { fmt, ROWS, savePercent, yearlyPerMonth } from '../assets/js/prices.js';
+import {
+  fmt,
+  ROWS,
+  PLANS,
+  planPrice,
+  perWeek,
+  planListText,
+  TRIAL_DAYS,
+  TRIAL_PLAN,
+  usdFromText,
+} from '../assets/js/prices.js';
+import { readFileSync } from 'node:fs';
 import { compareHlc, materialise } from '../assets/js/dashboard/store.js';
 import { buildRows, toCsv, toXlsx } from '../assets/js/dashboard/export.js';
 
@@ -323,26 +334,26 @@ test('a week starts on Monday', () => {
 /* -------------------------------------------------------------- prices */
 
 test('a symbol ending in a letter takes a non-breaking space', () => {
-  assert.equal(fmt(['', 'CHF', 0, 0, 2], 35), 'CHF 35.00');
-  assert.equal(fmt(['', 'CZK', 0, 0, 2], 999), 'Kč 999.00');
-  assert.equal(fmt(['', 'PLN', 0, 0, 2], 199.99), 'zł 199.99');
+  assert.equal(fmt(['', 'CHF', 0, 0, 0, 2], 35), 'CHF 35.00');
+  assert.equal(fmt(['', 'CZK', 0, 0, 0, 2], 999), 'Kč 999.00');
+  assert.equal(fmt(['', 'PLN', 0, 0, 0, 2], 199.99), 'zł 199.99');
 });
 
 test('a glyph symbol sits tight', () => {
-  assert.equal(fmt(['', 'GBP', 0, 0, 2], 39.99), '£39.99');
-  assert.equal(fmt(['', 'JPY', 0, 0, 0], 6000), '¥6,000');
+  assert.equal(fmt(['', 'GBP', 0, 0, 0, 2], 39.99), '£39.99');
+  assert.equal(fmt(['', 'JPY', 0, 0, 0, 0], 6000), '¥6,000');
 });
 
 test('free is a bare zero, never 0.00', () => {
-  assert.equal(fmt(['', 'USD', 0, 0, 2], 0), 'US$0');
-  assert.equal(fmt(['', 'JPY', 0, 0, 0], 0), '¥0');
+  assert.equal(fmt(['', 'USD', 0, 0, 0, 2], 0), 'US$0');
+  assert.equal(fmt(['', 'JPY', 0, 0, 0, 0], 0), '¥0');
 });
 
 test('decimals belong to the currency, not the export formatting', () => {
   const zero = ['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'TWD', 'TZS', 'PKR', 'NGN', 'KZT', 'RUB'];
   for (const row of ROWS) {
     const expected = zero.includes(row[1]) ? 0 : 2;
-    assert.equal(row[4], expected, `${row[0]} (${row[1]}) should carry ${expected} decimals`);
+    assert.equal(row[5], expected, `${row[0]} (${row[1]}) should carry ${expected} decimals`);
   }
 });
 
@@ -352,16 +363,57 @@ test('the picker lists 67 storefronts: 66 own-currency, plus the United States',
   assert.equal(ROWS.find((r) => r[1] === 'USD')[0], 'United States');
 });
 
-test('the derived saving is a whole percent off twelve months', () => {
-  const us = ROWS.find((r) => r[0] === 'United States');
-  assert.equal(savePercent(us), Math.round((1 - 39.99 / (5.99 * 12)) * 100));
-  assert.equal(yearlyPerMonth(us), 3.33);
+const SNAPSHOT = JSON.parse(
+  readFileSync(new URL('../data/store-prices.json', import.meta.url), 'utf8'),
+);
+
+test('every row is the store snapshot, and the snapshot has no row the table lacks', () => {
+  const byName = new Map(Object.values(SNAPSHOT.storefronts).map((r) => [r[0], r]));
+  assert.equal(byName.size, ROWS.length);
+  for (const row of ROWS) {
+    const src = byName.get(row[0]);
+    assert.ok(src, `${row[0]} is not in data/store-prices.json`);
+    assert.deepEqual(row.slice(0, 5), src, `${row[0]} disagrees with the snapshot`);
+  }
 });
 
-test('a zero-decimal currency derives a whole monthly figure', () => {
+test('the plans read the right columns', () => {
+  const au = ROWS.find((r) => r[0] === 'Australia');
+  assert.deepEqual(
+    PLANS.map((p) => planPrice(au, p)),
+    [2.99, 4.99, 29.99],
+  );
+  assert.equal(planListText(au), 'A$2.99 a week, A$4.99 a month or A$29.99 a year');
+});
+
+test('per week matches the app: whole minor units, rounded up', () => {
+  // The app's own worked cases (per-week.ts): exact divisions stay exact.
+  assert.equal(perWeek(['', 'AUD', 0, 0, 49.92, 2], 'yearly'), 0.96);
+  assert.equal(perWeek(['', 'AUD', 0, 8.32, 0, 2], 'monthly'), 1.92);
+  // A real remainder rounds up, never down.
+  const au = ROWS.find((r) => r[0] === 'Australia');
+  assert.equal(perWeek(au, 'monthly'), 1.16);
+  assert.equal(perWeek(au, 'yearly'), 0.58);
+  assert.equal(perWeek(au, 'weekly'), 2.99);
+});
+
+test('a zero-decimal currency derives a whole weekly figure', () => {
   const japan = ROWS.find((r) => r[0] === 'Japan');
-  assert.equal(yearlyPerMonth(japan), 500);
-  assert.equal(fmt(japan, yearlyPerMonth(japan)), '¥500');
+  assert.equal(perWeek(japan, 'monthly'), 116);
+  assert.equal(fmt(japan, perWeek(japan, 'monthly')), '¥116');
+});
+
+test('the trial is the store offer, on the yearly plan only', () => {
+  assert.equal(SNAPSHOT.trial.duration, 'TWO_WEEKS');
+  assert.equal(TRIAL_DAYS, 14);
+  assert.equal(TRIAL_PLAN, 'yearly');
+  assert.equal(SNAPSHOT.trial.product, SNAPSHOT.products[TRIAL_PLAN]);
+});
+
+test('the US-dollar line quotes the lowest US-dollar storefront prices', () => {
+  const low = SNAPSHOT.usd_storefronts;
+  const usd = ['', 'USD', low.weekly[0], low.monthly[0], low.yearly[0], 2];
+  assert.equal(usdFromText, `from ${planListText(usd)}`);
 });
 
 /* ---------------------------------------------------------------- HLC */
