@@ -1,0 +1,10 @@
+/* Pricing page only: the yearly trial pill and its terms line.
+ *
+ * Both keep their space on every plan, so switching plans never moves the
+ * price. They are hidden by visibility, not by [hidden], which site.css makes
+ * display:none sitewide. */
+
+.price-card__trial { margin: 0 0 10px; min-height: 24px; }
+.price-card__terms { min-height: 21px; }
+.price-card__trial.is-off,
+.price-card__terms.is-off { visibility: hidden; }

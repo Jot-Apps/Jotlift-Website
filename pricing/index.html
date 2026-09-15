@@ -34,6 +34,7 @@
 <meta property="og:type" content="website">
 <link rel="icon" href="/assets/img/glyph.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/pricing.css">
 <script>
   /* Applied before first paint so a light-mode reader never sees a dark flash. */
   try {
@@ -67,10 +68,11 @@
 
 <main id="main" class="shell-pricing" style="padding-top:56px;padding-bottom:96px">
   <h1 class="display h-page">Pricing</h1>
-  <p class="lede" style="max-width:52ch">One price, translated into your currency. No free trial, and no introductory rate that jumps later.</p>
+  <p class="lede" style="max-width:52ch">One price, translated into your currency. Yearly starts with 14&nbsp;days free.</p>
 
   <div class="plan-row">
     <div class="plan-switch" role="group" aria-label="Billing period">
+      <button type="button" data-plan="weekly" aria-pressed="false">Weekly</button>
       <button type="button" data-plan="monthly" aria-pressed="false">Monthly</button>
       <button type="button" data-plan="yearly" aria-pressed="true">Yearly</button>
     </div>
@@ -99,7 +101,7 @@
   </div>
 
   <p class="price-note">The <span data-country-echo>United States</span> store price. In the app the price always comes from your own store account.</p>
-  <p class="price-note--wide">These are the countries whose App Store charges in their own currency. Everywhere else the store charges in US dollars, at <span data-usd-monthly>US$5.99</span> a month or <span data-usd-yearly>US$39.99</span> a year.</p>
+  <p class="price-note--wide">These are the countries whose App Store charges in their own currency. Everywhere else the store charges in US dollars, <span data-usd-from>from US$1.99 a week, US$2.99 a month or US$19.99 a year</span>.</p>
 
   <div class="price-cards">
     <div class="price-card">
@@ -113,12 +115,14 @@
     <div class="price-card price-card--pro">
       <h2>Pro</h2>
       <p class="price-card__sub">Everything in free, plus the parts that think.</p>
-      <p class="price-card__amount" data-price-amount>US$39.99</p>
+      <p class="price-card__trial" data-price-trial><span class="pill pill--success">14 days free</span></p>
+      <p class="price-card__amount" data-price-amount>US$19.99</p>
       <p class="price-card__per" data-price-per>a year</p>
-      <p class="price-card__derived" data-price-note></p>
+      <p class="price-card__derived" data-price-note>About US$0.39 a week.</p>
       <div class="price-card__foot">
         <a class="btn btn--lg btn--full" href="https://apps.apple.com/us/app/jotlift-workout-log/id6780453950" rel="noopener" data-app-link>Subscribe in the app</a>
         <p class="price-card__billed">Billed by the app store you bought it from.</p>
+        <p class="price-card__billed price-card__terms" data-price-terms>Free for 14 days, then US$19.99 a year. New subscribers only.</p>
       </div>
     </div>
   </div>
