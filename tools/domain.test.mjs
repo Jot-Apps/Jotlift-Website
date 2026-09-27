@@ -25,7 +25,22 @@ import {
   durationText,
   weekStart,
 } from '../assets/js/dashboard/domain.js';
-import { fmt, ROWS, savePercent, yearlyPerMonth } from '../assets/js/prices.js';
+import {
+  fmt,
+  ROWS,
+  savePercent,
+  yearlyPerMonth,
+  heroPriceLine,
+  proPriceLine,
+  priceRow,
+  usdWeekly,
+  usdMonthly,
+  usdYearly,
+  WEEK,
+  MONTH,
+  YEAR,
+} from '../assets/js/prices.js';
+import { readFileSync } from 'node:fs';
 import { compareHlc, materialise } from '../assets/js/dashboard/store.js';
 import { buildRows, toCsv, toXlsx } from '../assets/js/dashboard/export.js';
 
@@ -323,26 +338,26 @@ test('a week starts on Monday', () => {
 /* -------------------------------------------------------------- prices */
 
 test('a symbol ending in a letter takes a non-breaking space', () => {
-  assert.equal(fmt(['', 'CHF', 0, 0, 2], 35), 'CHF 35.00');
-  assert.equal(fmt(['', 'CZK', 0, 0, 2], 999), 'Kč 999.00');
-  assert.equal(fmt(['', 'PLN', 0, 0, 2], 199.99), 'zł 199.99');
+  assert.equal(fmt(['', 'CHF', 0, 0, 0, 2], 35), 'CHF 35.00');
+  assert.equal(fmt(['', 'CZK', 0, 0, 0, 2], 999), 'Kč 999.00');
+  assert.equal(fmt(['', 'PLN', 0, 0, 0, 2], 199.99), 'zł 199.99');
 });
 
 test('a glyph symbol sits tight', () => {
-  assert.equal(fmt(['', 'GBP', 0, 0, 2], 39.99), '£39.99');
-  assert.equal(fmt(['', 'JPY', 0, 0, 0], 6000), '¥6,000');
+  assert.equal(fmt(['', 'GBP', 0, 0, 0, 2], 39.99), '£39.99');
+  assert.equal(fmt(['', 'JPY', 0, 0, 0, 0], 6000), '¥6,000');
 });
 
 test('free is a bare zero, never 0.00', () => {
-  assert.equal(fmt(['', 'USD', 0, 0, 2], 0), 'US$0');
-  assert.equal(fmt(['', 'JPY', 0, 0, 0], 0), '¥0');
+  assert.equal(fmt(['', 'USD', 0, 0, 0, 2], 0), 'US$0');
+  assert.equal(fmt(['', 'JPY', 0, 0, 0, 0], 0), '¥0');
 });
 
 test('decimals belong to the currency, not the export formatting', () => {
   const zero = ['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'TWD', 'TZS', 'PKR', 'NGN', 'KZT', 'RUB'];
   for (const row of ROWS) {
     const expected = zero.includes(row[1]) ? 0 : 2;
-    assert.equal(row[4], expected, `${row[0]} (${row[1]}) should carry ${expected} decimals`);
+    assert.equal(row[5], expected, `${row[0]} (${row[1]}) should carry ${expected} decimals`);
   }
 });
 
@@ -352,16 +367,82 @@ test('the picker lists 67 storefronts: 66 own-currency, plus the United States',
   assert.equal(ROWS.find((r) => r[1] === 'USD')[0], 'United States');
 });
 
-test('the derived saving is a whole percent off twelve months', () => {
+test('the derived saving is a whole percent off a year of the shorter plan', () => {
   const us = ROWS.find((r) => r[0] === 'United States');
-  assert.equal(savePercent(us), Math.round((1 - 39.99 / (5.99 * 12)) * 100));
-  assert.equal(yearlyPerMonth(us), 3.33);
+  assert.equal(savePercent(us), Math.round((1 - 19.99 / (2.99 * 12)) * 100));
+  assert.equal(savePercent(us, MONTH), 44);
+  assert.equal(savePercent(us, WEEK), Math.round((1 - 19.99 / (1.99 * 52)) * 100));
+  assert.equal(yearlyPerMonth(us), 1.67);
 });
 
 test('a zero-decimal currency derives a whole monthly figure', () => {
   const japan = ROWS.find((r) => r[0] === 'Japan');
-  assert.equal(yearlyPerMonth(japan), 500);
-  assert.equal(fmt(japan, yearlyPerMonth(japan)), '¥500');
+  assert.equal(yearlyPerMonth(japan), 250);
+  assert.equal(fmt(japan, yearlyPerMonth(japan)), '¥250');
+});
+
+/* The App Store price table, and everything the pages print from it. */
+const CSV = readFileSync(new URL('../data/app-store-prices.csv', import.meta.url), 'utf8')
+  .trim()
+  .split('\n')
+  .slice(1)
+  .map((line) => line.split(','));
+const TERRITORY = {
+  'United Arab Emirates': 'AE', Austria: 'AT', Australia: 'AU', 'Bosnia and Herzegovina': 'BA',
+  Belgium: 'BE', Bulgaria: 'BG', Brazil: 'BR', Canada: 'CA', Switzerland: 'CH', Chile: 'CL',
+  'China mainland': 'CN', Colombia: 'CO', Cyprus: 'CY', 'Czech Republic': 'CZ', Germany: 'DE',
+  Denmark: 'DK', Estonia: 'EE', Egypt: 'EG', Spain: 'ES', Finland: 'FI', France: 'FR',
+  'United Kingdom': 'GB', Greece: 'GR', 'Hong Kong': 'HK', Croatia: 'HR', Hungary: 'HU',
+  Indonesia: 'ID', Ireland: 'IE', Israel: 'IL', India: 'IN', Italy: 'IT', Japan: 'JP',
+  'Korea, Republic of': 'KR', Kazakhstan: 'KZ', Lithuania: 'LT', Luxembourg: 'LU', Latvia: 'LV',
+  Montenegro: 'ME', Malta: 'MT', Mexico: 'MX', Malaysia: 'MY', Nigeria: 'NG', Netherlands: 'NL',
+  Norway: 'NO', 'New Zealand': 'NZ', Peru: 'PE', Philippines: 'PH', Pakistan: 'PK', Poland: 'PL',
+  Portugal: 'PT', Qatar: 'QA', Romania: 'RO', Serbia: 'RS', Russia: 'RU', 'Saudi Arabia': 'SA',
+  Sweden: 'SE', Singapore: 'SG', Slovenia: 'SI', Slovakia: 'SK', Thailand: 'TH', Türkiye: 'TR',
+  Taiwan: 'TW', Tanzania: 'TZ', 'United States': 'US', Vietnam: 'VN', Kosovo: 'XK',
+  'South Africa': 'ZA',
+};
+
+test('the price table covers 175 storefronts, 66 of them in their own currency', () => {
+  assert.equal(CSV.length, 175);
+  assert.equal(new Set(CSV.map((r) => r[0])).size, 175);
+  assert.equal(CSV.filter((r) => r[1] !== 'USD').length, 66);
+});
+
+test('every picker row carries its storefront\'s currency and all three prices, in plan order', () => {
+  const pickable = CSV.filter(([t, c]) => c !== 'USD' || t === 'US');
+  assert.equal(pickable.length, ROWS.length);
+  for (const row of ROWS) {
+    const code = TERRITORY[row[0]];
+    const line = CSV.find((r) => r[0] === code);
+    assert.ok(line, `${row[0]} has no line in the price table`);
+    assert.deepEqual(
+      [row[1], row[WEEK], row[MONTH], row[YEAR]],
+      [line[1], Number(line[2]), Number(line[3]), Number(line[4])],
+      `${row[0]} (${code})`,
+    );
+  }
+});
+
+test('the US dollar line quotes the lowest USD price of each plan', () => {
+  const usd = CSV.filter((r) => r[1] === 'USD');
+  const min = (i) => Math.min(...usd.map((r) => Number(r[i])));
+  assert.equal(usdWeekly, fmt(['', 'USD', 0, 0, 0, 2], min(2)));
+  assert.equal(usdMonthly, fmt(['', 'USD', 0, 0, 0, 2], min(3)));
+  assert.equal(usdYearly, fmt(['', 'USD', 0, 0, 0, 2], min(4)));
+});
+
+test('the HTML carries the same US prices the scripts print, for a reader without JavaScript', () => {
+  const us = priceRow('United States');
+  const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(home.includes(`data-hero-price>${heroPriceLine(us)}<`), 'home hero price');
+  assert.ok(home.includes(`data-pro-price>${proPriceLine(us)}<`), 'home Pro price');
+  const pricing = readFileSync(new URL('../pricing/index.html', import.meta.url), 'utf8');
+  assert.ok(pricing.includes(`data-price-amount>${fmt(us, us[YEAR])}<`), 'pricing card amount');
+  assert.ok(pricing.includes(`data-usd-weekly>${usdWeekly}<`), 'USD weekly');
+  assert.ok(pricing.includes(`data-usd-monthly>${usdMonthly}<`), 'USD monthly');
+  assert.ok(pricing.includes(`data-usd-yearly>${usdYearly}<`), 'USD yearly');
+  assert.ok(!/No free trial/i.test(home + pricing), 'no page still says there is no free trial');
 });
 
 /* ---------------------------------------------------------------- HLC */

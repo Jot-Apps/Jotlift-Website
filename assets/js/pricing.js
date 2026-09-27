@@ -8,10 +8,15 @@ import {
   savedCountry,
   saveCountry,
   fmt,
+  usdWeekly,
   usdMonthly,
   usdYearly,
   yearlyPerMonth,
   savePercent,
+  WEEK,
+  MONTH,
+  YEAR,
+  TRIAL_LINE,
 } from './prices.js';
 
 initTheme();
@@ -35,23 +40,24 @@ const el = {
   note: document.querySelector('[data-price-note]'),
 };
 
+document.querySelector('[data-usd-weekly]').textContent = usdWeekly;
 document.querySelector('[data-usd-monthly]').textContent = usdMonthly;
 document.querySelector('[data-usd-yearly]').textContent = usdYearly;
 
 function renderPrices() {
   const row = priceRow(state.country);
-  const yearly = state.plan === 'yearly';
-  const save = savePercent(row);
+  const period = { weekly: WEEK, monthly: MONTH, yearly: YEAR }[state.plan];
 
   el.name.textContent = row[0];
   el.code.textContent = row[1];
   el.echo.textContent = row[0];
   el.free.textContent = fmt(row, 0);
-  el.amount.textContent = fmt(row, yearly ? row[3] : row[2]);
-  el.per.textContent = yearly ? 'a year' : 'a month';
-  el.note.textContent = yearly
-    ? `Works out to ${fmt(row, yearlyPerMonth(row))} a month, ${save}% less than paying monthly.`
-    : `${fmt(row, row[3])} a year works out ${save}% cheaper.`;
+  el.amount.textContent = fmt(row, row[period]);
+  el.per.textContent = { [WEEK]: 'a week', [MONTH]: 'a month', [YEAR]: 'a year' }[period];
+  el.note.textContent =
+    period === YEAR
+      ? `Works out to ${fmt(row, yearlyPerMonth(row))} a month, ${savePercent(row)}% less than paying monthly. ${TRIAL_LINE}`
+      : `${fmt(row, row[YEAR])} a year works out ${savePercent(row, period)}% cheaper. ${TRIAL_LINE}`;
 
   el.planButtons.forEach((b) =>
     b.setAttribute('aria-pressed', String(b.dataset.plan === state.plan)),
