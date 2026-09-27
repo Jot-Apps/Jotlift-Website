@@ -50,7 +50,7 @@ all 175 storefronts, read through RevenueCat on 2026-09-27. It is compiled into
 `ROWS` in `assets/js/prices.js`, and `tools/domain.test.mjs` fails if the two
 disagree. When a price changes in App Store Connect, update the CSV, then `ROWS`.
 
-Yearly carries a 14-day free trial for new subscribers (an introductory offer on
+Annual carries a 14-day free trial for new subscribers (an introductory offer on
 `jotlift_pro_annual`). The page states it as a fixed line, `TRIAL_LINE`.
 
 The picker lists the **66 storefronts that price in their own currency, plus the

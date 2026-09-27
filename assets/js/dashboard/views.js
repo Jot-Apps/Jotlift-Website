@@ -1328,6 +1328,6 @@ export function renderAccount(model, state) {
 function planLine(state) {
   if (!state.product) return 'Jotlift Pro.';
   const p = state.product;
-  const plan = /week/i.test(p) ? 'weekly' : /year|annual/i.test(p) ? 'yearly' : /month/i.test(p) ? 'monthly' : null;
+  const plan = /week/i.test(p) ? 'weekly' : /year|annual/i.test(p) ? 'annual' : /month/i.test(p) ? 'monthly' : null;
   return plan ? `Jotlift Pro, ${plan}.` : 'Jotlift Pro.';
 }

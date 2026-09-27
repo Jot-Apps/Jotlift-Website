@@ -25,10 +25,10 @@ const DECIMALS = 5;
 /* How many of each period a year holds, for the savings line. */
 const PER_YEAR = { [WEEK]: 52, [MONTH]: 12 };
 
-/* The free trial on the yearly plan (App Store Connect: introductory offer,
+/* The free trial on the annual plan (App Store Connect: introductory offer,
  * free, TWO_WEEKS). Once per person, so it is said as "for new subscribers".
  * "14 days", not "2 weeks", matching the app (founder, 2026-09-11). */
-export const TRIAL_LINE = 'Yearly starts with 14 days free for new subscribers.';
+export const TRIAL_LINE = 'Annual starts with 14 days free for new subscribers.';
 
 export const SYM = {
   AED: 'AED', AUD: 'A$', BRL: 'R$', CAD: 'C$', CHF: 'CHF', CLP: 'CLP$', CNY: 'CN¥',
