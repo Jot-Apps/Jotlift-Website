@@ -1,7 +1,9 @@
-/* App Store prices, compiled from the two App Store Connect exports kept at
- * data/price-monthly.csv and data/price-yearly.csv (175 storefronts each).
+/* App Store prices, compiled from data/app-store-prices.csv (175 storefronts,
+ * weekly, monthly and yearly), which is the live App Store Connect pricing of
+ * jotlift_pro_weekly, jotlift_pro_monthly and jotlift_pro_annual read through
+ * RevenueCat on 2026-09-27. tools/domain.test.mjs holds ROWS to that file.
  *
- * ONLY THE STOREFRONTS THAT PRICE IN THEIR OWN CURRENCY. Apple bills 109 of the
+ * ONLY THE STOREFRONTS THAT PRICE IN THEIR OWN CURRENCY. Apple bills 108 of the
  * 175 in US dollars, because it runs no local-currency storefront there, and a
  * picker that answers "Kenya" with a USD figure is not telling a Kenyan what
  * their currency costs. Those are covered by one line under the picker instead.
@@ -12,8 +14,21 @@
  * can show a figure before a store SDK has answered. Keep that boundary: it is
  * what the page prints, never what anybody is charged.
  *
- * Row shape: [country, currency, monthly, yearly, decimalPlaces]
+ * Row shape: [country, currency, weekly, monthly, yearly, decimalPlaces]
  */
+
+export const WEEK = 2;
+export const MONTH = 3;
+export const YEAR = 4;
+const DECIMALS = 5;
+
+/* How many of each period a year holds, for the savings line. */
+const PER_YEAR = { [WEEK]: 52, [MONTH]: 12 };
+
+/* The free trial on the yearly plan (App Store Connect: introductory offer,
+ * free, TWO_WEEKS). Once per person, so it is said as "for new subscribers".
+ * "14 days", not "2 weeks", matching the app (founder, 2026-09-11). */
+export const TRIAL_LINE = 'Yearly starts with 14 days free for new subscribers.';
 
 export const SYM = {
   AED: 'AED', AUD: 'A$', BRL: 'R$', CAD: 'C$', CHF: 'CHF', CLP: 'CLP$', CNY: 'CN¥',
@@ -28,73 +43,73 @@ export const SYM = {
  * zero for JPY, KRW, VND, IDR, HUF, CLP, COP, TWD, TZS, PKR, NGN, KZT and RUB,
  * two for everything else. So Switzerland reads "CHF 35.00", not "CHF35". */
 export const ROWS = [
-  ['Australia', 'AUD', 9.99, 59.99, 2],
-  ['Austria', 'EUR', 6.99, 44.99, 2],
-  ['Belgium', 'EUR', 6.99, 44.99, 2],
-  ['Bosnia and Herzegovina', 'EUR', 6.99, 44.99, 2],
-  ['Brazil', 'BRL', 39.9, 249.9, 2],
-  ['Bulgaria', 'EUR', 6.99, 44.99, 2],
-  ['Canada', 'CAD', 7.99, 49.99, 2],
-  ['Chile', 'CLP', 6990, 49990, 0],
-  ['China mainland', 'CNY', 38, 298, 2],
-  ['Colombia', 'COP', 29900, 199900, 0],
-  ['Croatia', 'EUR', 6.99, 44.99, 2],
-  ['Cyprus', 'EUR', 6.99, 44.99, 2],
-  ['Czech Republic', 'CZK', 149, 999, 2],
-  ['Denmark', 'DKK', 49, 349, 2],
-  ['Egypt', 'EGP', 299.99, 1999.99, 2],
-  ['Estonia', 'EUR', 6.99, 44.99, 2],
-  ['Finland', 'EUR', 6.99, 44.99, 2],
-  ['France', 'EUR', 6.99, 44.99, 2],
-  ['Germany', 'EUR', 6.99, 44.99, 2],
-  ['Greece', 'EUR', 6.99, 44.99, 2],
-  ['Hong Kong', 'HKD', 48, 288, 2],
-  ['Hungary', 'HUF', 2490, 17990, 0],
-  ['India', 'INR', 599, 3999, 2],
-  ['Indonesia', 'IDR', 99000, 699000, 0],
-  ['Ireland', 'EUR', 6.99, 44.99, 2],
-  ['Israel', 'ILS', 19.9, 149.9, 2],
-  ['Italy', 'EUR', 6.99, 44.99, 2],
-  ['Japan', 'JPY', 1000, 6000, 0],
-  ['Kazakhstan', 'KZT', 3490, 22990, 0],
-  ['Korea, Republic of', 'KRW', 9900, 66000, 0],
-  ['Kosovo', 'EUR', 6.99, 44.99, 2],
-  ['Latvia', 'EUR', 6.99, 44.99, 2],
-  ['Lithuania', 'EUR', 6.99, 44.99, 2],
-  ['Luxembourg', 'EUR', 6.99, 44.99, 2],
-  ['Malaysia', 'MYR', 29.9, 199.9, 2],
-  ['Malta', 'EUR', 6.99, 44.99, 2],
-  ['Mexico', 'MXN', 129, 899, 2],
-  ['Montenegro', 'EUR', 5.99, 39.99, 2],
-  ['Netherlands', 'EUR', 6.99, 44.99, 2],
-  ['New Zealand', 'NZD', 9.99, 69.99, 2],
-  ['Nigeria', 'NGN', 9900, 69900, 0],
-  ['Norway', 'NOK', 79, 499, 2],
-  ['Pakistan', 'PKR', 1700, 9900, 0],
-  ['Peru', 'PEN', 24.9, 179.9, 2],
-  ['Philippines', 'PHP', 399, 2490, 2],
-  ['Poland', 'PLN', 29.99, 199.99, 2],
-  ['Portugal', 'EUR', 6.99, 44.99, 2],
-  ['Qatar', 'QAR', 19.99, 149.99, 2],
-  ['Romania', 'RON', 29.99, 199.99, 2],
-  ['Russia', 'RUB', 499, 3490, 0],
-  ['Saudi Arabia', 'SAR', 24.99, 179.99, 2],
-  ['Serbia', 'EUR', 6.99, 44.99, 2],
-  ['Singapore', 'SGD', 8.98, 59.98, 2],
-  ['Slovakia', 'EUR', 6.99, 44.99, 2],
-  ['Slovenia', 'EUR', 6.99, 44.99, 2],
-  ['South Africa', 'ZAR', 119.99, 799.99, 2],
-  ['Spain', 'EUR', 6.99, 44.99, 2],
-  ['Sweden', 'SEK', 79, 499, 2],
-  ['Switzerland', 'CHF', 5, 35, 2],
-  ['Taiwan', 'TWD', 190, 1290, 0],
-  ['Tanzania', 'TZS', 17900, 99900, 0],
-  ['Thailand', 'THB', 199, 1490, 2],
-  ['Türkiye', 'TRY', 299.99, 1999.99, 2],
-  ['United Arab Emirates', 'AED', 22.99, 149.99, 2],
-  ['United Kingdom', 'GBP', 5.99, 39.99, 2],
-  ['United States', 'USD', 5.99, 39.99, 2],
-  ['Vietnam', 'VND', 199000, 1199000, 0],
+  ['Australia', 'AUD', 2.99, 4.99, 29.99, 2],
+  ['Austria', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Belgium', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Bosnia and Herzegovina', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Brazil', 'BRL', 12.9, 19.9, 129.9, 2],
+  ['Bulgaria', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Canada', 'CAD', 2.99, 3.99, 24.99, 2],
+  ['Chile', 'CLP', 1990, 2990, 22990, 0],
+  ['China mainland', 'CNY', 15, 22, 148, 2],
+  ['Colombia', 'COP', 9900, 14900, 99900, 0],
+  ['Croatia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Cyprus', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Czech Republic', 'CZK', 49, 79, 499, 2],
+  ['Denmark', 'DKK', 19, 29, 179, 2],
+  ['Egypt', 'EGP', 99.99, 149.99, 999.99, 2],
+  ['Estonia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Finland', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['France', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Germany', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Greece', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Hong Kong', 'HKD', 18, 22, 148, 2],
+  ['Hungary', 'HUF', 999, 1490, 8990, 0],
+  ['India', 'INR', 199, 299, 1999, 2],
+  ['Indonesia', 'IDR', 29000, 59000, 399000, 0],
+  ['Ireland', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Israel', 'ILS', 7.9, 9.9, 59.9, 2],
+  ['Italy', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Japan', 'JPY', 300, 500, 3000, 0],
+  ['Kazakhstan', 'KZT', 999, 1790, 11990, 0],
+  ['Korea, Republic of', 'KRW', 3300, 4400, 33000, 0],
+  ['Kosovo', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Latvia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Lithuania', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Luxembourg', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Malaysia', 'MYR', 9.9, 14.9, 99.9, 2],
+  ['Malta', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Mexico', 'MXN', 39, 69, 399, 2],
+  ['Montenegro', 'EUR', 1.99, 2.99, 19.99, 2],
+  ['Netherlands', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['New Zealand', 'NZD', 3.99, 4.99, 39.99, 2],
+  ['Nigeria', 'NGN', 3200, 4900, 29900, 0],
+  ['Norway', 'NOK', 29, 39, 249, 2],
+  ['Pakistan', 'PKR', 500, 900, 4900, 0],
+  ['Peru', 'PEN', 9.9, 12.9, 89.9, 2],
+  ['Philippines', 'PHP', 129, 199, 1290, 2],
+  ['Poland', 'PLN', 9.99, 14.99, 99.99, 2],
+  ['Portugal', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Qatar', 'QAR', 7.99, 9.99, 69.99, 2],
+  ['Romania', 'RON', 9.99, 14.99, 99.99, 2],
+  ['Russia', 'RUB', 199, 249, 1790, 0],
+  ['Saudi Arabia', 'SAR', 9.99, 12.99, 89.99, 2],
+  ['Serbia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Singapore', 'SGD', 2.98, 3.98, 29.98, 2],
+  ['Slovakia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Slovenia', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['South Africa', 'ZAR', 39.99, 59.99, 399.99, 2],
+  ['Spain', 'EUR', 1.99, 2.99, 22.99, 2],
+  ['Sweden', 'SEK', 29, 39, 249, 2],
+  ['Switzerland', 'CHF', 2, 3, 18, 2],
+  ['Taiwan', 'TWD', 60, 90, 690, 0],
+  ['Tanzania', 'TZS', 5900, 9900, 59900, 0],
+  ['Thailand', 'THB', 79, 99, 699, 2],
+  ['Türkiye', 'TRY', 99.99, 149.99, 999.99, 2],
+  ['United Arab Emirates', 'AED', 7.99, 12.99, 79.99, 2],
+  ['United Kingdom', 'GBP', 1.99, 2.99, 19.99, 2],
+  ['United States', 'USD', 1.99, 2.99, 19.99, 2],
+  ['Vietnam', 'VND', 59000, 99000, 599000, 0],
 ];
 
 export const DEFAULT_COUNTRY = 'United States';
@@ -122,35 +137,43 @@ export function fmt(row, amount) {
     sym +
     gap +
     amount.toLocaleString('en-US', {
-      minimumFractionDigits: row[4],
-      maximumFractionDigits: row[4],
+      minimumFractionDigits: row[DECIMALS],
+      maximumFractionDigits: row[DECIMALS],
     })
   );
 }
 
-/** The USD line under the picker, typeset through the same formatter. */
-const USD_ROW = ['', 'USD', 0, 0, 2];
-export const usdMonthly = fmt(USD_ROW, 5.99);
-export const usdYearly = fmt(USD_ROW, 39.99);
+/** The USD line under the picker: the lowest US dollar price of each plan.
+ *  Some USD storefronts sit a tier higher (US$3.99 a month, US$22.99 a year),
+ *  which is why the page says "from". */
+const USD_ROW = ['', 'USD', 1.99, 2.99, 19.99, 2];
+export const usdWeekly = fmt(USD_ROW, USD_ROW[WEEK]);
+export const usdMonthly = fmt(USD_ROW, USD_ROW[MONTH]);
+export const usdYearly = fmt(USD_ROW, USD_ROW[YEAR]);
 
 /** The yearly price expressed as a monthly one, on the currency's own grid. */
 export function yearlyPerMonth(row) {
-  const yearly = row[3];
-  return row[4] === 0 ? Math.round(yearly / 12) : Math.round((yearly / 12) * 100) / 100;
+  const yearly = row[YEAR];
+  return row[DECIMALS] === 0 ? Math.round(yearly / 12) : Math.round((yearly / 12) * 100) / 100;
 }
 
-/** How much less a year costs than twelve months, as a whole percent. */
-export function savePercent(row) {
-  return Math.round((1 - row[3] / (row[2] * 12)) * 100);
+/** How much less a year costs than a year of `period` (WEEK or MONTH), as a whole percent. */
+export function savePercent(row, period = MONTH) {
+  return Math.round((1 - row[YEAR] / (row[period] * PER_YEAR[period])) * 100);
 }
 
-/** The one price line the home page and the upgrade gate both print. */
+/** "US$1.99 a week, US$2.99 a month or US$19.99 a year" */
+export function planPrices(row) {
+  return `${fmt(row, row[WEEK])} a week, ${fmt(row, row[MONTH])} a month or ${fmt(row, row[YEAR])} a year`;
+}
+
+/** The one price line the home page prints. */
 export function heroPriceLine(row) {
-  return `Free to log, forever. Pro is ${fmt(row, row[2])} a month or ${fmt(row, row[3])} a year.`;
+  return `Free to log, forever. Pro is ${planPrices(row)}.`;
 }
 
 export function proPriceLine(row) {
-  return `${fmt(row, row[2])} a month or ${fmt(row, row[3])} a year. No free trial.`;
+  return `${planPrices(row)}. ${TRIAL_LINE}`;
 }
 
 /* The reader's storefront is remembered so every page quotes the same one. */

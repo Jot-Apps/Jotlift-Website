@@ -23,7 +23,7 @@ import { APP_STORE_URL, applyAppLink } from '../app-link.js';
 import { icon } from '../icons.js';
 import * as api from './api.js';
 import { materialise, buildModel } from './store.js';
-import { fmt, priceRow, savedCountry } from '../prices.js';
+import { priceRow, savedCountry, planPrices, TRIAL_LINE } from '../prices.js';
 import {
   fromMilli,
   toMilli,
@@ -330,9 +330,9 @@ function upgrade() {
         </div>
         <div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
           <a class="btn btn--lg" href="${APP_STORE_URL}" rel="noopener" data-app-link>Subscribe in the app</a>
-          <span style="font-size:15px" class="quiet">${esc(fmt(row, row[2]))} a month or ${esc(fmt(row, row[3]))} a year</span>
+          <span style="font-size:15px" class="quiet">${esc(planPrices(row))}</span>
         </div>
-        <p style="margin:16px 0 0;font-size:14px" class="decorative">Subscriptions are billed by your app store. No free trial.</p>
+        <p style="margin:16px 0 0;font-size:14px" class="decorative">Subscriptions are billed by your app store. ${esc(TRIAL_LINE)}</p>
       </div>
 
       <p style="margin:24px 0 0;font-size:15px" class="quiet">Your free account keeps backing up, and restoring is free forever. <a href="/pricing/" style="font-weight:600">See pricing</a></p>

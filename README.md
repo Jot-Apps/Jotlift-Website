@@ -38,15 +38,20 @@ assets/css/site.css  the design system realised as classes
 assets/js/           theme, icons, prices, the hero walk
 assets/js/dashboard/ the signed-in surface
 assets/img/screens/  eight real app captures (1206x2622), light and dark
-data/                the two App Store Connect price exports
+data/                the App Store price table (weekly, monthly, yearly)
 tools/                the checks: domain rules, the relay, the page guards
 ```
 
 ## Pricing
 
-`data/price-monthly.csv` and `data/price-yearly.csv` are the App Store Connect
-exports and are the source of truth. They are compiled into `ROWS` in
-`assets/js/prices.js`, which has been diffed against them row by row.
+`data/app-store-prices.csv` is the source of truth: the live App Store Connect
+price of `jotlift_pro_weekly`, `jotlift_pro_monthly` and `jotlift_pro_annual` in
+all 175 storefronts, read through RevenueCat on 2026-09-27. It is compiled into
+`ROWS` in `assets/js/prices.js`, and `tools/domain.test.mjs` fails if the two
+disagree. When a price changes in App Store Connect, update the CSV, then `ROWS`.
+
+Yearly carries a 14-day free trial for new subscribers (an introductory offer on
+`jotlift_pro_annual`). The page states it as a fixed line, `TRIAL_LINE`.
 
 The picker lists the **66 storefronts that price in their own currency, plus the
 United States** (USD is its own currency): 67 rows. The other 108 of the 175 are
@@ -57,7 +62,7 @@ what their currency costs.
 Decimals belong to the **currency**, not to how the export printed the number:
 zero for JPY, KRW, VND, IDR, HUF, CLP, COP, TWD, TZS, PKR, NGN, KZT and RUB, two
 for everything else. A symbol ending in a letter takes a non-breaking space
-(`CHF 35.00`, `Kč 999.00`, `zł 199.99`); a glyph symbol sits tight (`£39.99`).
+(`CHF 18.00`, `Kč 499.00`, `zł 99.99`); a glyph symbol sits tight (`£19.99`).
 
 **These figures are what the page prints, never what anybody is charged.** In
 the app the price is localized from the store (P04). This table only lets the
