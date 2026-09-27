@@ -39,6 +39,7 @@ import {
   WEEK,
   MONTH,
   YEAR,
+  TRIAL_LINE,
 } from '../assets/js/prices.js';
 import { readFileSync } from 'node:fs';
 import { compareHlc, materialise } from '../assets/js/dashboard/store.js';
@@ -442,7 +443,22 @@ test('the HTML carries the same US prices the scripts print, for a reader withou
   assert.ok(pricing.includes(`data-usd-weekly>${usdWeekly}<`), 'USD weekly');
   assert.ok(pricing.includes(`data-usd-monthly>${usdMonthly}<`), 'USD monthly');
   assert.ok(pricing.includes(`data-usd-yearly>${usdYearly}<`), 'USD yearly');
-  assert.ok(!/No free trial/i.test(home + pricing), 'no page still says there is no free trial');
+  const note = `Works out to ${fmt(us, yearlyPerMonth(us))} a month, ${savePercent(us)}% less than paying monthly. ${TRIAL_LINE}`;
+  assert.ok(pricing.includes(`data-price-note>${note}<`), 'pricing card note');
+});
+
+test('no page still says there is no free trial, and the terms quote the Australian store', () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const pages = ['../index.html', '../pricing/index.html', '../terms/index.html', '../assets/js/dashboard/index.js'];
+  for (const path of pages) assert.ok(!/no free trial/i.test(read(path)), path);
+  const au = priceRow('Australia');
+  const aud = (n) => `AUD $${n.toFixed(2)}`;
+  assert.ok(
+    read('../terms/index.html').includes(
+      `Pricing is ${aud(au[WEEK])} per week, ${aud(au[MONTH])} per month or ${aud(au[YEAR])} per year`,
+    ),
+    'terms price sentence',
+  );
 });
 
 /* ---------------------------------------------------------------- HLC */
