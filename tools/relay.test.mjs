@@ -31,6 +31,11 @@ async function open({ status = 'active', expires = null, rows = FEED, fail = fal
     }));
   });
 
+  // The webfont is a third-party request the dashboard does not depend on, and
+  // it cannot load in a sandbox. Answer it empty so the run is hermetic.
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+
   await ctx.route(`${PROJECT}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -258,6 +263,8 @@ console.log('\n— a custom exercise can be deleted —');
   const notes = await page.locator('.ex-panel__note').allTextContents();
   check(notes.some((t) => t.includes('Deleting keeps')), 'and explains what deleting keeps');
   await page.click('[data-exercise-delete]');
+  // Every deletion asks first, through the one confirm.
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(500);
   const batch = posted.at(-1) || [];
   check(batch.some((e) => e.table === 'exercises' && e.deleted === true), 'deleting tombstones it');
@@ -326,11 +333,23 @@ console.log('\n— routines: create, add, reorder, save, delete —');
   check((await page.inputValue('[data-routine-name]')) === 'Upper body',
     'an unsaved name is not thrown away by a structural change');
 
-  // Sets and reps, then a reorder, then save.
+  // Plan a set on the first exercise. The plan opens under its row, and the
+  // set is written as soon as it is added, the way the app's builder adds one.
   const firstRow = page.locator('[data-routine-item]').first();
-  await firstRow.locator('[data-item-field="sets"]').fill('4');
-  await firstRow.locator('[data-item-field="reps"]').fill('6-8');
-  await page.locator('[data-routine-item]').nth(1).locator('[data-routine-move="up"]').click();
+  const opener = firstRow.locator('[data-routine-open]');
+  if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+  await firstRow.locator('[data-routine-set-add]').click();
+  await page.waitForTimeout(400);
+  const planned = (posted.at(-1) || []).find((e) => e.table === 'routine_sets');
+  check(!!planned, 'adding a set writes a planned set');
+  // The new set is the LAST row: an added set copies the one above it.
+  await firstRow.locator('[data-set-field="reps"]').last().fill('6');
+  await firstRow.locator('[data-set-field="weight"]').last().fill('55');
+
+  // Reorder from the keyboard: the handle is a real button, and the arrow keys
+  // move the block it belongs to.
+  await page.locator('[data-routine-block]').nth(1).locator('[data-routine-grip]').focus();
+  await page.keyboard.press('ArrowUp');
   await page.waitForTimeout(400);
   const reordered = (posted.at(-1) || []).filter((e) => e.table === 'routine_exercises');
   check(reordered.length === 2, 'a reorder rewrites both positions', `${reordered.length}`);
@@ -346,27 +365,27 @@ console.log('\n— routines: create, add, reorder, save, delete —');
   await page.waitForTimeout(500);
   const saved = posted.at(-1) || [];
   const rt = saved.find((e) => e.table === 'routines');
-  const items = saved.filter((e) => e.table === 'routine_exercises');
   check(rt?.payload?.name === 'Upper body A', 'saving writes the name', rt?.payload?.name);
   check((await page.locator('.routine-card__name').allTextContents()).some((t) => t.includes('Upper body A')),
     'and the card shows it');
-  // The targets were carried by the reorder, so assert they ROUND TRIPPED:
-  // pushed at some point, and read back out of the rebuilt feed onto the row.
-  const everyPush = posted.flat().filter((e) => e.table === 'routine_exercises');
-  const withTargets = everyPush.find((e) => e.payload.targetSets === 4);
-  check(!!withTargets, 'the sets cell was pushed',
-    JSON.stringify(everyPush.map((i) => i.payload.targetSets)));
-  check(withTargets?.payload?.targetRepsMin === 6 && withTargets?.payload?.targetRepsMax === 8,
-    '"6-8" became a min and a max',
-    JSON.stringify([withTargets?.payload?.targetRepsMin, withTargets?.payload?.targetRepsMax]));
+  // The typed targets ROUND TRIP: pushed at some point, and read back out of the
+  // rebuilt feed onto the row.
+  const everySet = posted.flat().filter((e) => e.table === 'routine_sets');
+  // The last write of the set this test planned, not of a set the sample feed
+  // already held (opening a routine converts those, and that writes them too).
+  const withTargets = everySet.filter((e) => e.id === planned?.id).at(-1);
+  check(withTargets?.payload?.targetRepsMin === 6, 'the reps target was pushed', JSON.stringify(withTargets?.payload));
+  check(withTargets?.payload?.targetRepsMax === 6, 'as one number, min equal to max, as the app writes it');
+  check(withTargets?.payload?.targetWeightMilli === 55000, 'with the weight in milli', String(withTargets?.payload?.targetWeightMilli));
 
   const benchRow = page.locator('[data-routine-item]', { hasText: 'Bench press' });
-  check((await benchRow.locator('[data-item-field="sets"]').inputValue()) === '4',
-    'and the sets cell reads back from the feed');
-  check((await benchRow.locator('[data-item-field="reps"]').inputValue()) === '6-8',
-    'as does the rep range');
+  check((await benchRow.locator('[data-set-field="reps"]').last().inputValue()) === '6',
+    'and the reps read back from the feed');
+  check((await benchRow.locator('[data-set-field="weight"]').last().inputValue()) === '55',
+    'as does the weight');
 
   await page.locator('[data-routine-item]').first().locator('[data-routine-remove]').click();
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(400);
   const removed = (posted.at(-1) || []).filter((e) => e.table === 'routine_exercises');
   check(removed.some((e) => e.deleted === true), 'removing a row tombstones it');
@@ -374,6 +393,7 @@ console.log('\n— routines: create, add, reorder, save, delete —');
     'and the rest close up behind it');
 
   await page.click('[data-routine-delete]');
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(500);
   const gone = posted.at(-1) || [];
   check(gone.some((e) => e.table === 'routines' && e.deleted === true), 'deleting tombstones the routine');
