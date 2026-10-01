@@ -17,7 +17,6 @@ import {
   repsText,
   durationText,
   shortDate,
-  longDate,
   fullDate,
   dateTime,
   weekLabel,
@@ -90,11 +89,14 @@ export function confirmDialog() {
  * month to fall behind on. Paging has no motion: the heading changing is the
  * confirmation.
  */
-export function historyMonths(model) {
+export function historyMonths(model, now = Date.now()) {
+  // Past-only: a row dated ahead (a skewed clock on another device) never makes
+  // a month after this one, as in the app.
+  const current = monthKeyOf(now);
   const months = [];
   for (const s of model.sessions) {
     const key = monthKeyOf(s.startedAt);
-    if (months[months.length - 1] !== key) months.push(key);
+    if (key <= current && months[months.length - 1] !== key) months.push(key);
   }
   return months;
 }
@@ -103,22 +105,22 @@ export function renderHistory(model, state) {
   const render = makeRenderer(model.displayUnit);
   const total = model.totals.workouts;
   const meta = `<span class="tab-head__meta">${total.toLocaleString('en-US')} ${total === 1 ? 'workout' : 'workouts'} in your log</span>`;
+  const months = historyMonths(model);
 
-  if (model.sessions.length === 0) {
+  if (months.length === 0) {
     return `
-      <div class="tab-head">${meta}</div>
       <p class="ex-empty">No workouts here yet. Log one on your phone and it shows up here.</p>`;
   }
 
-  const months = historyMonths(model);
   const month = months.includes(state.historyMonth) ? state.historyMonth : months[0];
   const index = months.indexOf(month);
   const sessions = model.sessions.filter((s) => monthKeyOf(s.startedAt) === month);
 
   // Session volume is summed in each exercise's own unit; reconcile it into the
   // unit on screen once, through the one renderer.
-  const volume = sessions.reduce((sum, s) => sum + render.value(s.volumeMilli, s.volumeUnit), 0);
   const sets = sessions.reduce((sum, s) => sum + s.setCount, 0);
+  const exercises = new Set(sessions.flatMap((s) => s.entries.map((e) => e.exercise.id))).size;
+  const records = sessions.reduce((sum, s) => sum + (model.recordsBySession.get(s.id) || 0), 0);
   const ms = sessions.reduce((sum, s) => sum + s.durationMs, 0);
 
   const weeks = [];
@@ -144,11 +146,11 @@ export function renderHistory(model, state) {
     <div class="hist">
       <div class="hist__side">
         ${renderCalendar(model, month, sessions, months[index + 1] ?? null, months[index - 1] ?? null)}
-        <div class="card stats" aria-label="${esc(monthTitle(month))} totals">
-          <div class="stat"><span class="stat__value">${sessions.length.toLocaleString('en-US')}</span><span class="stat__label">${sessions.length === 1 ? 'Workout' : 'Workouts'}</span></div>
-          <div class="stat"><span class="stat__value">${Math.round(volume).toLocaleString('en-US')}</span><span class="stat__label">${esc(render.unit)} volume</span></div>
+        <div class="card stats" role="group" aria-label="${esc(monthTitle(month))} totals">
           <div class="stat"><span class="stat__value">${sets.toLocaleString('en-US')}</span><span class="stat__label">${sets === 1 ? 'Set' : 'Sets'}</span></div>
           <div class="stat"><span class="stat__value">${esc(durationText(ms))}</span><span class="stat__label">Time</span></div>
+          <div class="stat"><span class="stat__value">${exercises.toLocaleString('en-US')}</span><span class="stat__label">${exercises === 1 ? 'Exercise' : 'Exercises'}</span></div>
+          <div class="stat"><span class="stat__value">${records.toLocaleString('en-US')}</span><span class="stat__label">${records === 1 ? 'Record' : 'Records'}</span></div>
         </div>
       </div>
       <div class="hist__list">${list}</div>
@@ -176,7 +178,8 @@ function renderCalendar(model, month, sessions, previous, next) {
   const cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<span class="cal__dow" aria-hidden="true">${d}</span>`);
   for (let i = 0; i < lead; i++) cells.push('<span aria-hidden="true"></span>');
   for (let d = 1; d <= days; d++) {
-    const workouts = byDay.get(d);
+    // Only a trained day is a button, and a day after today never is.
+    const workouts = new Date(y, m - 1, d).getTime() <= now.getTime() ? byDay.get(d) : null;
     if (!workouts) {
       cells.push(`<span class="day${d === today ? ' day--today' : ''}" aria-hidden="true">${d}</span>`);
       continue;
@@ -215,14 +218,15 @@ function renderSession(session, model, state, render) {
 
   const detail = open
     ? `<div class="session__detail">${session.entries
-        .map((entry) => renderSessionExercise(entry, session, model, render))
+        .map((entry) => renderSessionExercise(entry, model, render))
         .join('')}</div>`
     : '';
 
   return `
     <div class="session" data-session-row="${esc(session.id)}">
-      <button class="session__toggle" type="button" data-session="${esc(session.id)}" aria-expanded="${open}">
-        <span class="session__date" aria-label="${esc(longDate(session.startedAt))}">
+      <button class="session__toggle" type="button" data-session="${esc(session.id)}" aria-expanded="${open}"
+              aria-label="${esc(rowLabel(session, exercises, records, render))}">
+        <span class="session__date" aria-hidden="true">
           <span class="session__day">${new Date(session.startedAt).getDate()}</span>
           <span class="session__month">${esc(monthShort(session.startedAt))}</span>
         </span>
@@ -241,12 +245,25 @@ function renderSession(session, model, state, render) {
     </div>`;
 }
 
-function renderSessionExercise(entry, session, model, render) {
+/** The row's spoken label, the app's SessionRow order: date, name, then facts. */
+function rowLabel(session, exercises, records, render) {
+  return [
+    dayName(session.startedAt),
+    session.title,
+    `${exercises} ${exercises === 1 ? 'exercise' : 'exercises'}`,
+    durationText(session.durationMs),
+    ...(records > 0 ? [`${records} ${records === 1 ? 'record' : 'records'}`] : []),
+    `${Math.round(render.value(session.volumeMilli, session.volumeUnit)).toLocaleString('en-US')} ${render.unit} volume`,
+  ].join(', ');
+}
+
+function renderSessionExercise(entry, model, render) {
   const exercise = entry.exercise;
   const unit = exercise.unit || 'kg';
   const floorMilli = model.floorByExercise.get(exercise.id);
   const repOnly = model.isRepOnly(exercise);
-  const record = (model.recordExercisesBySession.get(session.id) || []).includes(exercise.id);
+  // The set that carried a weight record says so in gold, as a word (SetLine.tsx).
+  const recordWord = exercise.bodyweightSubtype === 'assisted' ? 'Least assistance' : 'Heaviest';
 
   const floor = floorMilli != null
     ? `<span class="pill pill--success">${icon('lock', 11, 2.4)}Floor ${esc(render.text(floorMilli, unit))}</span>`
@@ -278,8 +295,9 @@ function renderSessionExercise(entry, session, model, render) {
         })
         .join(', ');
       const type = sides[0].setType;
-      const tag = type && type !== 'working' ? SET_TYPE_LABELS[type] || '' : '';
-      return `<span class="session__set-n">${index + 1}</span><span class="session__set-v">${text}</span><span class="session__set-t">${esc(tag)}</span>`;
+      const record = sides.some((set) => model.recordSetIds.has(set.id));
+      const tag = record ? recordWord : type && type !== 'working' ? SET_TYPE_LABELS[type] || '' : '';
+      return `<span class="session__set-n">${index + 1}</span><span class="session__set-v">${text}</span><span class="session__set-t${record ? ' session__set-t--record' : ''}">${esc(tag)}</span>`;
     })
     .join('');
 
@@ -288,7 +306,6 @@ function renderSessionExercise(entry, session, model, render) {
       <div class="session__exercise-head">
         <h4>${esc(exercise.name)}</h4>
         ${floor}
-        ${record ? '<span class="pill pill--record">Record</span>' : ''}
       </div>
       ${perSide ? '<p class="session__perside">Left and right logged separately</p>' : ''}
       <div class="session__sets">${rows}</div>

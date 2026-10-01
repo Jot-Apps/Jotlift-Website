@@ -69,7 +69,7 @@
   --color-surface:         #212329;
   --color-elevated:        #262931;
   --color-hairline:        #2E3036;
-  --color-scrim:           rgba(11, 11, 13, 0.5);
+  --color-scrim:           rgba(11, 11, 13, 0.4);
   --color-text:            #ECEDEF;
   --color-text-quiet:      #9A9DA5;
   --color-text-decorative: #6E727A;
@@ -97,7 +97,7 @@
     --color-surface:         #212329;
     --color-elevated:        #262931;
     --color-hairline:        #2E3036;
-    --color-scrim:           rgba(11, 11, 13, 0.5);
+    --color-scrim:           rgba(11, 11, 13, 0.4);
     --color-text:            #ECEDEF;
     --color-text-quiet:      #9A9DA5;
     --color-text-decorative: #6E727A;
@@ -180,6 +180,9 @@ img { max-width: 100%; }
 .skip-link:focus { left: 16px; top: 16px; text-decoration: none; }
 
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+/* A full-bleed row inside a card that clips its corners draws its ring inside. */
+.session__toggle:focus-visible, .ex-row:focus-visible, .best-row:focus-visible,
+.pick-row:focus-within, .account-row :focus-visible, .routine-open:focus-visible { outline-offset: -2px; }
 
 [hidden] { display: none !important; }
 
@@ -272,6 +275,12 @@ img { max-width: 100%; }
   transform: scale(0.97); transition-duration: var(--motion-instant); transition-timing-function: linear;
 }
 .btn[disabled]:active, .stepper button[disabled]:active { transform: none; }
+
+/* Hit areas. A control drawn smaller than 44px still answers a 44px press
+   (Pressable.tsx's hitSlop); what is drawn does not change. */
+.chip, .segmented button, .btn--sm, .stepper button, .tick, .day--on, .cal__nav button { position: relative; }
+.chip::after, .segmented button::after, .btn--sm::after, .stepper button::after { content: ""; position: absolute; inset: -4px 0; }
+.tick::after, .day--on::after { content: ""; position: absolute; inset: -6px; }
 
 /* Button (src/ui/Button.tsx). Accent is spent here, sparingly. */
 .btn {
@@ -519,13 +528,24 @@ img { max-width: 100%; }
 .phone__dots { display: flex; gap: 8px; align-items: center; }
 .phone__dots button {
   width: 8px; height: 8px; padding: 0; border: none; border-radius: var(--radius-pill);
-  background: var(--color-text-decorative); opacity: 0.45; cursor: pointer;
+  background: var(--color-text-quiet); opacity: 0.5; cursor: pointer;
   transition: width var(--motion-quick) var(--ease-decel), background-color var(--motion-quick) var(--ease-decel);
 }
 .phone__dots button[aria-current="true"] { width: 22px; background: var(--color-accent); opacity: 1; }
 /* The hit area is 44px; the dot is what is drawn. */
 .phone__dots button { position: relative; }
-.phone__dots button::after { content: ""; position: absolute; inset: -18px -4px; }
+.phone__dots { gap: 0; }
+.phone__dots button { margin: 0 4px; }
+.phone__dots button::after { content: ""; position: absolute; inset: -18px -8px; }
+.phone__pause {
+  margin-left: 8px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text-quiet); cursor: pointer;
+}
+.phone__pause:hover { color: var(--color-text); }
+.phone__pause svg { display: block; }
+.phone__pause .icon-play { display: none; }
+.phone__pause[aria-pressed="true"] .icon-play { display: block; }
+.phone__pause[aria-pressed="true"] .icon-pause { display: none; }
 
 .feature-card { background: var(--color-elevated); border-radius: var(--radius-lg); box-shadow: var(--elev-1); padding: 20px; }
 .feature-card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; line-height: 22px; color: var(--color-text); }
@@ -814,7 +834,7 @@ img { max-width: 100%; }
   border: 0; border-radius: var(--radius-pill); background: none; color: var(--color-accent); cursor: pointer;
 }
 .cal__nav button[disabled] { color: var(--color-text-decorative); opacity: 0.5; cursor: default; }
-.cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 8px; justify-items: center; }
+.cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 12px; justify-items: center; }
 .cal__dow { font-size: 12px; line-height: 16px; color: var(--color-text-quiet); }
 .day {
   width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-pill);
@@ -825,7 +845,7 @@ img { max-width: 100%; }
    record adds the gold ring and says so in the day's label. */
 .day--on { background: var(--color-text); color: var(--color-canvas); font-weight: 600; cursor: pointer; }
 .day--on:active { opacity: 0.6; }
-.day--rec { box-shadow: inset 0 0 0 2px var(--color-record); }
+.day--rec { box-shadow: 0 0 0 2px var(--color-elevated), 0 0 0 4px var(--color-record); }
 .day--today { color: var(--color-text); font-weight: 600; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
 .stat { padding: 14px 16px; min-width: 0; }
@@ -869,6 +889,7 @@ img { max-width: 100%; }
 .session__set-v { font-size: 17px; font-weight: 600; line-height: 26px; color: var(--color-text); font-variant-numeric: tabular-nums; }
 .session__set-v .x { font-weight: 400; color: var(--color-text-quiet); }
 .session__set-t { font-size: 13px; line-height: 26px; color: var(--color-text-quiet); text-align: right; }
+.session__set-t--record { color: var(--color-record); font-weight: 600; }
 .session__hint { margin: 0; font-size: 14px; color: var(--color-text-quiet); }
 
 /* Progress */
@@ -1187,7 +1208,7 @@ button.routine-open { cursor: pointer; }
 .account-card p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; color: var(--color-text-quiet); }
 .account-card p:last-child { margin-bottom: 0; }
 .account-links { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center; margin-top: 12px; }
-.account-links a { min-height: 36px; display: inline-flex; align-items: center; font-size: 15px; font-weight: 600; color: var(--color-text-quiet); }
+.account-links a { min-height: 44px; display: inline-flex; align-items: center; font-size: 15px; font-weight: 600; color: var(--color-text-quiet); }
 .account-links a.danger-link { color: var(--color-danger); }
 .signout { min-height: 44px; margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--color-text-quiet); background: none; border: none; padding: 0 4px; font-family: var(--font-text); cursor: pointer; }
 .signout:hover { color: var(--color-text); }
@@ -1293,7 +1314,7 @@ button.routine-open { cursor: pointer; }
 /* Reduce Motion: slides and springs become a 160ms cross-fade, and nothing
    moves (motion.ts reducedMotionFallback). */
 @media (prefers-reduced-motion: reduce) {
-  .jotx, .jotx * { transition-duration: 0s !important; }
+  *:not(.phone__panel), *::before, *::after { transition-duration: 0s !important; }
   *, *::before, *::after { animation-duration: 160ms !important; animation-timing-function: linear !important; }
   .roll, .roll--down, .notice--success:not([hidden]), .ex-panel, .ex-panel--create,
   .routine-plan, .session__detail, .confirm[open], .country__menu, .prg-picker__menu { animation-name: fade-in !important; }

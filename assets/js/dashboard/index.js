@@ -82,6 +82,9 @@ const state = {
   openRoutineItems: new Set(),
   // The handle to put the keyboard back on after a reorder re-renders the list.
   focusGrip: null,
+  // Any other control a click re-renders out from under the keyboard: the
+  // month arrows, a muscle chip, a tab. A selector for its replacement.
+  focusAfter: null,
   // Grouping a superset is a mode: the exercise it started from, and what has
   // been picked so far. Null when the routine is being edited normally.
   supersetSource: null,
@@ -189,6 +192,15 @@ function render() {
   /* A reorder rebuilds the list, and a fresh button never has the focus the one
    * it replaced was holding. Without this, moving a row with the keyboard moves
    * it once and then drops you at the top of the page. */
+  if (state.focusAfter) {
+    const next = root.querySelector(state.focusAfter);
+    state.focusAfter = null;
+    // An arrow at the end of the months is disabled; the keyboard stays on the
+    // other one rather than falling to the top of the page.
+    const target = next && next.disabled ? root.querySelector('.cal__nav button:not([disabled])') : next;
+    target?.focus({ preventScroll: true });
+  }
+
   if (state.focusGrip) {
     const grip = root.querySelector(`[data-routine-block="${CSS.escape(state.focusGrip)}"] [data-routine-grip]`);
     state.focusGrip = null;
@@ -463,6 +475,7 @@ function onClick(e) {
   if (tab) {
     state.tab = tab.dataset.tab;
     state.pickerOpen = false;
+    state.focusAfter = `${tab.closest('.dash-tabbar') ? '.dash-tabbar' : '.dash-rail'} [data-tab="${tab.dataset.tab}"]`;
     try {
       localStorage.setItem('jotlift.tab', state.tab);
     } catch {
@@ -481,7 +494,12 @@ function onClick(e) {
 
   if (target('[data-sign-out]')) {
     api.signOut().then(() => {
-      Object.assign(state, { phase: 'signedout', user: null, model: null, entitlement: null, message: null });
+      Object.assign(state, {
+        phase: 'signedout', user: null, model: null, entitlement: null, message: null,
+        // The next person to sign in on this tab starts on their own log.
+        historyMonth: null, exerciseCategory: null, openSession: null, stepRoll: null,
+        selectedExercise: null, selectedRoutine: null, progressExercise: null, exerciseQuery: '',
+      });
       render();
     });
     return;
@@ -500,6 +518,7 @@ function onClick(e) {
   if (month) {
     state.historyMonth = month.dataset.month;
     state.openSession = null;
+    state.focusAfter = `.cal__nav [aria-label="${month.getAttribute('aria-label')}"]`;
     render();
     return;
   }
@@ -519,6 +538,7 @@ function onClick(e) {
   const exCat = target('[data-ex-cat]');
   if (exCat) {
     state.exerciseCategory = exCat.dataset.exCat || null;
+    state.focusAfter = `[data-ex-cat="${CSS.escape(exCat.dataset.exCat)}"]`;
     render();
     return;
   }

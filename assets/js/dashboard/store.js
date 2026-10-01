@@ -197,6 +197,15 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
   for (let i = sessions.length - 1; i >= 0; i--) {
     const session = sessions[i];
     for (const entry of session.entries) {
+      // One exercise placed twice in a workout is ONE session of it, the way the
+      // app's history read folds it, so the chart, the floor walk and the record
+      // rule all count a workout once.
+      const list = historyByExercise.get(entry.exercise.id);
+      const last = list && list[list.length - 1];
+      if (last && last.workoutId === session.id) {
+        last.sets = last.sets.concat(entry.sets);
+        continue;
+      }
       group(historyByExercise, entry.exercise.id, {
         workoutId: session.id,
         startedAt: session.startedAt,
@@ -211,20 +220,21 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
    * exercise placed twice in a workout is one session of it, so placements fold
    * by workout first, the way the app's history read folds them. */
   const recordsBySession = new Map();
-  const recordExercisesBySession = new Map();
-  for (const [exerciseId, placements] of historyByExercise) {
-    const exercise = exercisesById.get(exerciseId);
-    const folded = [];
-    for (const p of placements) {
-      const last = folded[folded.length - 1];
-      if (last && last.workoutId === p.workoutId) last.sets = last.sets.concat(p.sets);
-      else folded.push({ workoutId: p.workoutId, startedAt: p.startedAt, sets: p.sets });
-    }
-    const assisted = exercise?.bodyweightSubtype === 'assisted';
+  // The set that carried a weight record, for the gold word beside it in a past
+  // workout (workout-record.ts): the heaviest working set, or on an assisted
+  // lift the least assistance, first in logged order.
+  const recordSetIds = new Set();
+  for (const [exerciseId, folded] of historyByExercise) {
+    const assisted = exercisesById.get(exerciseId)?.bodyweightSubtype === 'assisted';
     for (const session of folded) {
-      if (!isRecord(recordAsOfItsDate(folded, session, assisted))) continue;
+      const hit = recordAsOfItsDate(folded, session, assisted);
+      if (!isRecord(hit)) continue;
       recordsBySession.set(session.workoutId, (recordsBySession.get(session.workoutId) || 0) + 1);
-      group(recordExercisesBySession, session.workoutId, exerciseId);
+      const working = session.sets.filter((set) => countsAsWorking(set.setType) && set.weightMilli != null);
+      const weights = working.map((set) => set.weightMilli);
+      const target = hit.heaviestWeight ? Math.max(...weights) : hit.leastAssistance ? Math.min(...weights) : null;
+      const carrier = target == null ? null : working.find((set) => set.weightMilli === target);
+      if (carrier) recordSetIds.add(carrier.id);
     }
   }
 
@@ -381,7 +391,7 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
     totals,
     historyByExercise,
     recordsBySession,
-    recordExercisesBySession,
+    recordSetIds,
     floorByExercise,
     lastDoneByExercise,
     routines,

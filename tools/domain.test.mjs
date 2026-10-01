@@ -46,7 +46,9 @@ import {
   TRIAL_LINE,
 } from '../assets/js/prices.js';
 import { readFileSync } from 'node:fs';
-import { compareHlc, materialise } from '../assets/js/dashboard/store.js';
+import { compareHlc, materialise, buildModel } from '../assets/js/dashboard/store.js';
+import { row } from './sample-feed.mjs';
+import { historyMonths } from '../assets/js/dashboard/views.js';
 import { buildRows, toCsv, toXlsx } from '../assets/js/dashboard/export.js';
 
 let passed = 0;
@@ -411,6 +413,48 @@ test('an assisted lift reads the other way round', () => {
     rsession(200, [rs({ weightMilli: 40_000, reps: 5 })]),
     rsession(100, [rs({ weightMilli: 30_000, reps: 5 })]),
   ], true), [false, false, true, false, true]);
+});
+
+/* ----------------------------------------- records, through the model */
+
+/* One exercise placed twice in a workout is ONE session of it (records.ts and
+ * the history read fold it), so the chip counts it once, the chart plots it
+ * once, and the gold word lands on the set that carried the weight. */
+function foldedLog() {
+  const day = 86400000;
+  const t0 = new Date(2026, 8, 1, 7).getTime();
+  const rows = [row('exercises', { id: 'x-bench', name: 'Bench press', unit: 'kg', equipmentType: 'barbell', incrementMilli: 2500, isBuiltin: 1, bodyweightSubtype: null })];
+  const workout = (id, startedAt, placements) => {
+    rows.push(row('workouts', { id, title: id, startedAt, endedAt: startedAt + 3600000, notes: null }));
+    placements.forEach((sets, i) => {
+      const we = `${id}-we-${i}`;
+      rows.push(row('workout_exercises', { id: we, workoutId: id, exerciseId: 'x-bench', orderIndex: i, supersetGroupId: null }));
+      sets.forEach(([w, reps, setType = 'working'], j) =>
+        rows.push(row('sets', { id: `${we}-s${j}`, workoutExerciseId: we, orderIndex: j, setType, side: 'both', reps, weightMilli: w })));
+    });
+  };
+  workout('a', t0, [[[100000, 5]]]);
+  workout('b', t0 + 3 * day, [[[100000, 5], [120000, 1, 'warmup']], [[105000, 3]]]);
+  return buildModel(materialise(rows), { cutoff: Infinity });
+}
+
+test('a workout placing one exercise twice is one session of it', () => {
+  const model = foldedLog();
+  assert.equal(model.historyByExercise.get('x-bench').length, 2);
+  assert.equal(model.recordsBySession.get('b'), 1);
+  assert.equal(model.recordsBySession.has('a'), false);
+});
+
+test('the gold word goes on the working set that carried the weight, never a warmup', () => {
+  const model = foldedLog();
+  assert.deepEqual([...model.recordSetIds], ['b-we-1-s0']);
+});
+
+test('History never offers a month after this one', () => {
+  const model = foldedLog();
+  const now = new Date(2026, 7, 20).getTime(); // in August, before both workouts
+  assert.deepEqual(historyMonths(model, now), []);
+  assert.deepEqual(historyMonths(model, new Date(2026, 8, 30).getTime()), ['2026-09']);
 });
 
 /* -------------------------------------------------------------- prices */

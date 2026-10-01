@@ -52,10 +52,17 @@ if (screen && dots && caption) {
     });
   }
 
-  dots.innerHTML = labels
-    .map((label, i) => `<button type="button" data-dot="${i}" aria-label="${label}" aria-current="${i === 0}"></button>`)
-    .join('');
-  const buttons = [...dots.querySelectorAll('button')];
+  dots.innerHTML =
+    labels
+      .map((label, i) => `<button type="button" data-dot="${i}" aria-label="${label}" aria-current="${i === 0}"></button>`)
+      .join('') +
+    /* WCAG 2.2.2: anything that moves on its own can be paused. */
+    `<button class="phone__pause" type="button" data-hero-pause aria-pressed="false" aria-label="Pause the screens">` +
+    '<svg class="icon-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>' +
+    '<svg class="icon-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5Z"/></svg>' +
+    '</button>';
+  const buttons = [...dots.querySelectorAll('[data-dot]')];
+  const pause = dots.querySelector('[data-hero-pause]');
 
   function place(panel, x, animate) {
     panel.style.transition = animate
@@ -72,7 +79,9 @@ if (screen && dots && caption) {
     }
   }
 
-  function show(index, dir = 1) {
+  /* Only a step the reader asked for is announced; the walk on its own is not. */
+  function show(index, dir = 1, byReader = false) {
+    caption.setAttribute('aria-live', byReader ? 'polite' : 'off');
     const next = ((index % n) + n) % n;
     if (next === at) return;
     const from = panels[at];
@@ -95,15 +104,16 @@ if (screen && dots && caption) {
 
   buttons.forEach((b, i) =>
     b.addEventListener('click', () => {
-      show(i, i > at ? 1 : -1);
+      show(i, i > at ? 1 : -1, true);
       restart();
     }),
   );
   dots.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    if (!e.target.matches('[data-dot]')) return;
     e.preventDefault();
     const dir = e.key === 'ArrowRight' ? 1 : -1;
-    show(at + dir, dir);
+    show(at + dir, dir, true);
     buttons[at].focus();
     restart();
   });
@@ -117,7 +127,7 @@ if (screen && dots && caption) {
     startX = null;
     if (Math.abs(dx) < 40) return;
     const dir = dx < 0 ? 1 : -1;
-    show(at + dir, dir);
+    show(at + dir, dir, true);
     restart();
   });
 
@@ -125,6 +135,16 @@ if (screen && dots && caption) {
      or has focus in it, and while the tab is hidden. */
   const hero = document.querySelector('[data-hero]');
   let paused = false;
+  /* Stopped by the reader, or by Reduce Motion, where nothing advances on its
+     own and the dots and arrows still step it. */
+  let stopped = reduce.matches;
+  pause.setAttribute('aria-pressed', String(stopped));
+  if (stopped) pause.setAttribute('aria-label', 'Play the screens');
+  pause.addEventListener('click', () => {
+    stopped = !stopped;
+    pause.setAttribute('aria-pressed', String(stopped));
+    pause.setAttribute('aria-label', stopped ? 'Play the screens' : 'Pause the screens');
+  });
   hero.addEventListener('pointerenter', () => { paused = true; });
   hero.addEventListener('pointerleave', () => { paused = false; });
   hero.addEventListener('focusin', () => { paused = true; });
@@ -134,7 +154,7 @@ if (screen && dots && caption) {
   function restart() {
     clearInterval(timer);
     timer = setInterval(() => {
-      if (!paused && !document.hidden) show(at + 1, 1);
+      if (!paused && !stopped && !document.hidden) show(at + 1, 1);
     }, 4600);
   }
 

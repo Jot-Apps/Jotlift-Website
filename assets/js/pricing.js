@@ -110,7 +110,6 @@ el.planButtons.forEach((b) =>
   b.addEventListener('click', () => {
     state.plan = b.dataset.plan;
     renderPrices();
-watchThumbs();
   }),
 );
 
@@ -128,7 +127,6 @@ el.list.addEventListener('click', (e) => {
   saveCountry(state.country);
   setOpen(false);
   renderPrices();
-watchThumbs();
 });
 
 document.addEventListener('click', (e) => {

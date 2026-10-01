@@ -131,10 +131,25 @@ console.log('\n— history: each month, its records, and a day opening its worko
     const title = (await page.textContent('.cal__title')).trim();
     check(rows.length > 0 && wrong.length === 0, `${title}: every row carries the chip the app derives`, JSON.stringify(wrong));
 
+    // The ring, against the model: every workout on that day, not only the one
+    // the day opens.
+    const dayKey = (ms) => new Date(ms).toDateString();
     const days = await page.$$eval('[data-day]', (els) =>
       els.map((e) => ({ id: e.dataset.day, ring: e.classList.contains('day--rec'), label: e.getAttribute('aria-label') })));
-    const ringWrong = days.filter((d) => d.ring !== /record/.test(d.label));
-    check(ringWrong.length === 0, `${title}: a ring exactly where the day's label says record`, JSON.stringify(ringWrong));
+    const ringWrong = days.filter((d) => {
+      const on = model.sessions.find((x) => x.id === d.id);
+      const sum = model.sessions
+        .filter((x) => dayKey(x.startedAt) === dayKey(on.startedAt))
+        .reduce((n, x) => n + (model.recordsBySession.get(x.id) || 0), 0);
+      return d.ring !== sum > 0 || /record/.test(d.label) !== sum > 0;
+    });
+    check(ringWrong.length === 0, `${title}: a gold ring on exactly the days that set a record`, JSON.stringify(ringWrong));
+
+    // Monday first: the blanks before day 1 are that day's place in the week.
+    const [monthName, year] = title.split(' ');
+    const first = new Date(`${monthName} 1, ${year}`);
+    const blanks = await page.$$eval('.cal__grid > *', (els) => els.slice(7).findIndex((e) => e.textContent.trim() === '1'));
+    check(blanks === (first.getDay() + 6) % 7, `${title}: the 1st sits under its weekday, Monday first`, String(blanks));
 
     const previous = page.locator('.cal__nav [aria-label="Previous month"]');
     if (await previous.isDisabled()) break;
@@ -143,6 +158,11 @@ console.log('\n— history: each month, its records, and a day opening its worko
     check((await page.textContent('.cal__title')).trim() !== title, 'the arrow pages to the month before');
   }
   check(months > 1, 'the sample log spans more than one month', String(months));
+  const oldest = (await page.textContent('.cal__title')).trim();
+  await page.click('.cal__nav [aria-label="Next month"]');
+  check((await page.textContent('.cal__title')).trim() !== oldest, 'the other arrow pages forward again');
+  check(await page.evaluate(() => document.activeElement?.matches('.cal__nav button')),
+    'and the keyboard stays on the arrows rather than falling to the top of the page');
   check(chipsSeen === model.recordsBySession.size, 'every record in the log was shown once', `${chipsSeen}/${model.recordsBySession.size}`);
 
   const day = page.locator('[data-day]').first();
@@ -151,6 +171,21 @@ console.log('\n— history: each month, its records, and a day opening its worko
   await page.waitForTimeout(150);
   check((await page.getAttribute(`[data-session="${id}"]`, 'aria-expanded')) === 'true', 'a trained day opens its workout');
   check(await page.isVisible(`[data-session-row="${id}"] .session__detail`), 'and its sets are on screen');
+  await ctx.close();
+}
+
+console.log('\n— history: a workout dated ahead never makes a future day or month —');
+{
+  // Another device with a clock running fast logs a workout three days ahead.
+  const ahead = Date.now() + 3 * 86400000;
+  const rows = FEED.concat([{ ...FEED.find((r) => r.entity_table === 'workouts'), seq: 99999,
+    entity_id: 'w-ahead', payload: { ...FEED.find((r) => r.entity_table === 'workouts').payload, id: 'w-ahead', startedAt: ahead, endedAt: ahead + 3600000 } }]);
+  const { page, ctx } = await open({ rows });
+  const title = (await page.textContent('.cal__title')).trim();
+  const thisMonth = new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+  check(title === thisMonth, 'History opens on this month, not the one ahead', `${title} / ${thisMonth}`);
+  check((await page.locator('[data-day="w-ahead"]').count()) === 0, 'and the day ahead is not a button');
+  check(await page.locator('.cal__nav [aria-label="Next month"]').isDisabled(), 'and there is no month after this one');
   await ctx.close();
 }
 
