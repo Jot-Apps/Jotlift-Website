@@ -2,6 +2,7 @@
 
 import { applyAppLink } from './app-link.js';
 import { initTheme } from './theme.js';
+import { placeThumbs, watchThumbs } from './segmented.js';
 import {
   ROWS,
   priceRow,
@@ -52,7 +53,19 @@ function renderPrices() {
   el.code.textContent = row[1];
   el.echo.textContent = row[0];
   el.free.textContent = fmt(row, 0);
-  el.amount.textContent = fmt(row, row[period]);
+  /* The amount rolls when it changes, up for a dearer figure and down for a
+     cheaper one (DigitRoll.tsx). A storefront change is a different number,
+     not a step, so it simply lands. */
+  const amount = fmt(row, row[period]);
+  if (el.amount.textContent !== amount) {
+    const prev = renderPrices.last;
+    const roll = prev && prev.country === state.country;
+    el.amount.innerHTML = roll
+      ? `<span class="roll${row[period] < prev.value ? ' roll--down' : ''}"></span>`
+      : '<span></span>';
+    el.amount.firstChild.textContent = amount;
+  }
+  renderPrices.last = { country: state.country, value: row[period] };
   el.per.textContent = { [WEEK]: 'a week', [MONTH]: 'a month', [YEAR]: 'a year' }[period];
   el.note.textContent =
     period === YEAR
@@ -62,6 +75,7 @@ function renderPrices() {
   el.planButtons.forEach((b) =>
     b.setAttribute('aria-pressed', String(b.dataset.plan === state.plan)),
   );
+  placeThumbs();
 }
 
 function renderList() {
@@ -96,6 +110,7 @@ el.planButtons.forEach((b) =>
   b.addEventListener('click', () => {
     state.plan = b.dataset.plan;
     renderPrices();
+watchThumbs();
   }),
 );
 
@@ -113,6 +128,7 @@ el.list.addEventListener('click', (e) => {
   saveCountry(state.country);
   setOpen(false);
   renderPrices();
+watchThumbs();
 });
 
 document.addEventListener('click', (e) => {
@@ -127,3 +143,4 @@ document.addEventListener('keydown', (e) => {
 });
 
 renderPrices();
+watchThumbs();
