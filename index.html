@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-app="jotlift" data-theme="dark">
+<html lang="en" data-app="jotlift">
 <head>
 <meta charset="utf-8">
 <!-- Content Security Policy. Nothing here loads a third-party script, so every
@@ -48,7 +48,7 @@
 <header class="site-header">
   <div class="site-header__inner">
     <a class="wordmark" href="/">
-      <svg width="24" height="24" viewBox="0 0 100 100" fill="none" aria-hidden="true"><g transform="translate(10,10) scale(0.8)"><path d="M67 26 L67 58 C67 73 56 81 46 81 C36 81 30 74 30 66" fill="none" stroke="var(--color-accent)" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      <svg width="24" height="24" viewBox="0 0 100 100" fill="none" aria-hidden="true"><g transform="translate(10,10) scale(0.8)"><path d="M67 26 L67 58 C67 73 56 81 46 81 C36 81 30 74 30 66" fill="none" stroke="var(--color-brand)" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
       <span class="wordmark__text">Jot<span>lift</span></span>
     </a>
     <nav class="site-nav" aria-label="Main">
@@ -80,28 +80,71 @@
     </div>
 
     <!--
-      The phone. Four real captures from the app, walked on one track. Each
-      capture carries the app's own chrome, including the Liquid Glass tab bar,
-      so the page never redraws it. Their own top band is replaced by the drawn
-      one below, on the same canvas colour the captures use, so nothing reads
-      as cropped.
+      The phone. Seven real captures from the app, in a drawn iPhone at their own
+      1206 x 2622. Each capture carries the app's own chrome, including its tab
+      bar, so the page never redraws it. Their status band was painted out on
+      export (it held a live clock, a charging battery and two live activities)
+      and the clean one below is drawn over it, the same on every screen.
+      With JavaScript off the first screen shows, in the device's appearance.
     -->
-    <div class="phone-col">
+    <div class="phone-col" data-hero>
       <div class="phone">
-        <div class="phone__status">
-          <span class="phone__clock">7:00</span>
-          <span class="phone__island"></span>
-          <span class="phone__meters">
-            <svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7.5" width="3" height="3.5" rx="1" fill="currentColor"/><rect x="4.6" y="5.5" width="3" height="5.5" rx="1" fill="currentColor"/><rect x="9.2" y="3" width="3" height="8" rx="1" fill="currentColor"/><rect x="13.8" y="0" width="3" height="11" rx="1" fill="currentColor" opacity="0.35"/></svg>
-            <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 3.6a9.4 9.4 0 0 1 13 0"/><path d="M3.7 6.3a5.6 5.6 0 0 1 7.6 0"/><circle cx="7.5" cy="9.4" r="1.1" fill="currentColor" stroke="none"/></svg>
-            <svg width="23" height="11" viewBox="0 0 24 12" aria-hidden="true"><rect x="0.5" y="0.5" width="20" height="11" rx="3" fill="none" stroke="currentColor" stroke-opacity="0.45"/><rect x="2" y="2" width="15" height="8" rx="1.5" fill="currentColor"/><rect x="21.5" y="4" width="1.5" height="4" rx="0.75" fill="currentColor" opacity="0.45"/></svg>
-          </span>
-        </div>
-        <div class="phone__viewport">
-          <div class="phone__track" data-hero-track></div>
+        <div class="phone__screen" data-hero-screen>
+          <div class="phone__panel" data-shot="logger">
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/logger-dark.webp">
+              <img src="/assets/img/screens/logger-light.webp" width="1206" height="2622" alt="Logging a set, in the Jotlift app" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="exercise-page" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/exercise-page-dark.webp">
+              <img src="/assets/img/screens/exercise-page-light.webp" width="1206" height="2622" alt="Progress by exercise, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="routines" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/routines-dark.webp">
+              <img src="/assets/img/screens/routines-light.webp" width="1206" height="2622" alt="Routines, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="history-log" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/history-log-dark.webp">
+              <img src="/assets/img/screens/history-log-light.webp" width="1206" height="2622" alt="Workout history, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="workout-detail" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/workout-detail-dark.webp">
+              <img src="/assets/img/screens/workout-detail-light.webp" width="1206" height="2622" alt="A finished workout, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="exercises" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/exercises-dark.webp">
+              <img src="/assets/img/screens/exercises-light.webp" width="1206" height="2622" alt="Your exercise library, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__panel" data-shot="workout" hidden>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/img/screens/workout-dark.webp">
+              <img src="/assets/img/screens/workout-light.webp" width="1206" height="2622" alt="Ready to start, in the Jotlift app" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <div class="phone__status" aria-hidden="true">
+            <span class="phone__clock">9:41</span>
+            <span class="phone__island"></span>
+            <span class="phone__meters">
+              <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1" fill="currentColor"/><rect x="5" y="5.5" width="3" height="6.5" rx="1" fill="currentColor"/><rect x="10" y="3" width="3" height="9" rx="1" fill="currentColor"/><rect x="15" y="0" width="3" height="12" rx="1" fill="currentColor"/></svg>
+              <svg viewBox="0 0 16 12"><path d="M8 2.2c2.4 0 4.6.9 6.3 2.5l1.2-1.3A10.9 10.9 0 0 0 8 .4C5.2.4 2.5 1.5.5 3.4l1.2 1.3A9.1 9.1 0 0 1 8 2.2Zm0 3.6c1.4 0 2.7.5 3.7 1.4l1.2-1.3a7.3 7.3 0 0 0-9.8 0l1.2 1.3c1-.9 2.3-1.4 3.7-1.4Zm0 3.5c-.5 0-1 .2-1.3.5L8 11.6l1.3-1.8c-.3-.3-.8-.5-1.3-.5Z" fill="currentColor"/></svg>
+              <svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.5" fill="none" stroke="currentColor" stroke-opacity=".4"/><rect x="2" y="2" width="20" height="8" rx="2" fill="currentColor"/><path d="M25 4v4c.8-.3 1.4-1.1 1.4-2S25.8 4.3 25 4Z" fill="currentColor" fill-opacity=".4"/></svg>
+            </span>
+          </div>
         </div>
       </div>
-      <div class="phone__dots" data-hero-dots role="tablist" aria-label="App screens"></div>
+      <p class="phone__caption" aria-live="polite" data-hero-caption>Logging a set</p>
+      <div class="phone__dots" data-hero-dots role="group" aria-label="App screens"></div>
     </div>
   </section>
 
@@ -137,55 +180,64 @@
         <p class="eyebrow">Pro &middot; the headline</p>
         <h2 class="display h-lead">Auto progression tells you when to go up</h2>
         <p style="margin:0 0 24px;font-size:19px;line-height:1.5;max-width:44ch;color:var(--color-text)">Three workouts at the same weight, mostly hitting the same reps, and Jotlift tells you it is time to go up. That is the whole rule.</p>
-        <div class="rules">
+        <div class="card rules">
           <div class="rule">
-            <span class="rule__n">01</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
             <p><strong>It shows the count it is working from.</strong> You can check it against your own history.</p>
           </div>
           <div class="rule">
-            <span class="rule__n">02</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
             <p><strong>It never lowers a weight.</strong> A lighter day neither counts towards the three nor resets them.</p>
           </div>
           <div class="rule">
-            <span class="rule__n">03</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
             <p><strong>It does not tell you what to lift.</strong> The next set comes up greyed, ready to change, and Jotlift defers to whatever you actually log.</p>
           </div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div class="card" style="padding:26px">
-          <p class="eyebrow" style="margin-bottom:16px">What you see</p>
-          <div class="whyline">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
-            <div>
-              <p class="whyline__title">Increase weight</p>
-              <p class="whyline__count">Three sessions at 60 kg</p>
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <div>
+          <p class="eyebrow">What you see</p>
+          <!-- The app's exercise card as the logger draws it: the engine's line in
+               its well under the name, then the sets. -->
+          <div class="card ex-card">
+            <div class="ex-card__head"><h3 class="ex-card__name">Bench press</h3><span class="ex-card__meta">3 sets</span></div>
+            <div class="whyline">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Ready to increase"><circle cx="12" cy="12" r="9"/><path d="M12 16.5V8"/><path d="m8.5 11.5 3.5-3.5 3.5 3.5"/></svg>
+              <p class="whyline__title">Increase weight. 3 workouts at 100 kg. Aiming for 5 reps.</p>
+              <span class="whyline__marks" role="img" aria-label="3 of 3 counted"><i></i><i></i><i></i></span>
+            </div>
+            <div class="setgrid" data-setgrid>
+              <span class="setgrid__h setgrid__h--c">Set</span><span class="setgrid__h">Previous</span><span class="setgrid__h setgrid__h--c">kg</span><span class="setgrid__h setgrid__h--c">Reps</span><span></span>
+              <div class="setrow setrow--logged"><span class="setrow__n">W</span><span class="setrow__prev">50 &times; 8</span><span class="setrow__cell"><span>50</span></span><span class="setrow__cell"><span>8</span></span><span class="setrow__tick"><button class="tick" type="button" aria-pressed="true" aria-label="Warmup set logged" data-tick><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button></span></div>
+              <div class="setrow setrow--logged"><span class="setrow__n">1</span><span class="setrow__prev">100 &times; 5</span><span class="setrow__cell"><span>100</span></span><span class="setrow__cell"><span>5</span></span><span class="setrow__tick"><button class="tick" type="button" aria-pressed="true" aria-label="Set 1 logged" data-tick><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button></span></div>
+              <div class="setrow setrow--ghost"><span class="setrow__n">2</span><span class="setrow__prev">100 &times; 5</span><span class="setrow__cell"><span>100</span></span><span class="setrow__cell"><span>5</span></span><span class="setrow__tick"><button class="tick" type="button" aria-pressed="false" aria-label="Log set 2" data-tick><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button></span></div>
             </div>
           </div>
-          <p style="margin:16px 0 0;font-size:15px;line-height:1.55" class="quiet">One row at the bottom of the exercise card. It never overwrites a set you have logged.</p>
+          <p style="margin:12px 0 0;font-size:15px;line-height:1.55" class="quiet">One line on the exercise card, above your sets. It never overwrites a set you have logged.</p>
         </div>
-        <div class="card" style="padding:26px">
-          <p class="eyebrow" style="margin-bottom:12px">The run it counted</p>
+        <div>
+          <p class="eyebrow">The run it counted</p>
           <!-- One grid, three columns sized once, so the weights line up down
-               the page instead of per row. -->
-          <div class="run">
-            <span class="run__date">Mon 18 Aug</span>
-            <span class="run__load">60 kg &times; 8</span>
+               the card instead of per row. -->
+          <div class="card run">
+            <span class="run__date">Mon 7 Sep</span>
+            <span class="run__load">100 kg &times; 5</span>
             <span class="run__note">Counted, 1</span>
 
-            <span class="run__date">Thu 21 Aug</span>
-            <span class="run__load">60 kg &times; 8</span>
+            <span class="run__date">Thu 10 Sep</span>
+            <span class="run__load">100 kg &times; 5</span>
             <span class="run__note">Counted, 2</span>
 
-            <span class="run__date run__row--skipped" style="opacity:0.6">Mon 25 Aug</span>
-            <span class="run__load" style="opacity:0.6">60 kg &times; 7</span>
-            <span class="run__note" style="opacity:0.6;font-weight:400">Skipped</span>
+            <span class="run__date is-skipped">Mon 14 Sep</span>
+            <span class="run__load is-skipped">100 kg &times; 4</span>
+            <span class="run__note is-skipped">Skipped</span>
 
-            <span class="run__date">Thu 28 Aug</span>
-            <span class="run__load">60 kg &times; 8</span>
+            <span class="run__date">Thu 17 Sep</span>
+            <span class="run__load">100 kg &times; 5</span>
             <span class="run__note run__note--final">Counted, 3</span>
           </div>
-          <p style="margin:16px 0 0;font-size:15px;line-height:1.55" class="quiet">Three counted, so Jotlift speaks up. The 7 was lighter than the rest, so it was skipped: it did not count towards the three, and it did not reset them either.</p>
+          <p style="margin:12px 0 0;font-size:15px;line-height:1.55" class="quiet">Three counted, so Jotlift speaks up. The 4 fell short of the rest, so it was skipped: it did not count towards the three, and it did not reset them either.</p>
         </div>
       </div>
     </div>

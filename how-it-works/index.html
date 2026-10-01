@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-app="jotlift" data-theme="dark">
+<html lang="en" data-app="jotlift">
 <head>
 <meta charset="utf-8">
 <!-- Content Security Policy. Nothing here loads a third-party script, so every
@@ -48,7 +48,7 @@
 <header class="site-header">
   <div class="site-header__inner">
     <a class="wordmark" href="/">
-      <svg width="24" height="24" viewBox="0 0 100 100" fill="none" aria-hidden="true"><g transform="translate(10,10) scale(0.8)"><path d="M67 26 L67 58 C67 73 56 81 46 81 C36 81 30 74 30 66" fill="none" stroke="var(--color-accent)" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      <svg width="24" height="24" viewBox="0 0 100 100" fill="none" aria-hidden="true"><g transform="translate(10,10) scale(0.8)"><path d="M67 26 L67 58 C67 73 56 81 46 81 C36 81 30 74 30 66" fill="none" stroke="var(--color-brand)" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
       <span class="wordmark__text">Jot<span>lift</span></span>
     </a>
     <nav class="site-nav" aria-label="Main">
@@ -78,16 +78,12 @@
     <span class="pill pill--accent">Pro</span>
   </div>
   <p>Do three workouts at the same weight, mostly hitting the same reps, and Jotlift tells you it is time to go up. That is the whole rule. There is nothing to set up and nothing to choose.</p>
-  <p style="margin-bottom:20px">The message is one row at the bottom of the exercise card. It shows the count it is working from, so you can check it against your own history. Once a weight has been earned three times it becomes your floor, and the floor only ever rises.</p>
+  <p style="margin-bottom:20px">The message is one line on the exercise card, above your sets. It shows the count it is working from, so you can check it against your own history. Once a weight has been earned three times it becomes your floor, and the floor only ever rises.</p>
 
-  <div style="margin:4px 0 24px;display:flex;justify-content:center">
-    <div style="display:inline-flex;align-items:center;gap:12px;padding:16px 22px;background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--elev-1)">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-decorative)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
-      <div>
-        <p style="margin:0;font-size:16px;font-weight:600;color:var(--color-text);white-space:nowrap">Increase weight</p>
-        <p style="margin:2px 0 0;font-size:14px;white-space:nowrap" class="quiet num">Three sessions at 60 kg</p>
-      </div>
-    </div>
+  <div class="whyline" style="background:var(--color-elevated);box-shadow:var(--elev-1)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Ready to increase"><circle cx="12" cy="12" r="9"/><path d="M12 16.5V8"/><path d="m8.5 11.5 3.5-3.5 3.5 3.5"/></svg>
+    <p class="whyline__title">Increase weight. 3 workouts at 100 kg. Aiming for 5 reps.</p>
+    <span class="whyline__marks" role="img" aria-label="3 of 3 counted"><i></i><i></i><i></i></span>
   </div>
 
   <p>It does not tell you what to lift. It tells you it is time to increase and shows the run it counted. Your next set comes up greyed and ready to change, and it never asks you to go down.</p>

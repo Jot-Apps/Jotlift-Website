@@ -1,4 +1,5 @@
-/* Home. The hero phone walk, and the two live price lines. */
+/* Home. The hero phone walk, the exercise card's tick, and the two live price
+ * lines. */
 
 import { applyAppLink } from './app-link.js';
 import { initTheme, currentTheme } from './theme.js';
@@ -18,79 +19,152 @@ if (proPrice) proPrice.textContent = proPriceLine(row);
 /* ---------------------------------------------------------------- the phone */
 
 /*
- * The four subjects, in the founder's order, as REAL captures rather than a
- * redrawn mock: the logger, the chart, the routines and the log.
+ * Seven real captures, walked in order, one subject at a time. Each is a panel
+ * stacked in the screen; a step slides the old one out and the new one in on
+ * the app's push timing (320ms, decelerate-in), forward or back by direction.
+ * Under Reduce Motion the step is a 160ms cross-fade and nothing moves.
  *
- * The dark capture shows in dark mode and the light one in light mode, and THE
- * CYCLE IS THE SAME FOUR SUBJECTS EITHER WAY: the position is an index into
- * this list, not into a per-mode subset, so flipping the theme swaps the image
- * under the frame and leaves the subject, the order and the timer where they
- * were.
+ * The dark capture shows in dark mode and the light one in light mode, and the
+ * walk is THE SAME SEVEN SUBJECTS EITHER WAY: flipping the theme swaps the image
+ * under the frame and leaves the subject and the timer where they were.
  */
-const SHOTS = [
-  ['Logging a set', '/assets/img/screens/logger-dark.png', '/assets/img/screens/logger-light.png'],
-  ['Progress by exercise', '/assets/img/screens/chart-dark.png', '/assets/img/screens/chart-light.png'],
-  ['Routines', '/assets/img/screens/routines-dark.png', '/assets/img/screens/routines-light.png'],
-  ['Workout history', '/assets/img/screens/history-dark.png', '/assets/img/screens/history-light.png'],
-];
-
-const track = document.querySelector('[data-hero-track]');
+const screen = document.querySelector('[data-hero-screen]');
 const dots = document.querySelector('[data-hero-dots]');
+const caption = document.querySelector('[data-hero-caption]');
 
-if (track && dots) {
-  const n = SHOTS.length;
+if (screen && dots && caption) {
+  const panels = [...screen.querySelectorAll('[data-shot]')];
+  const imgs = panels.map((p) => p.querySelector('img'));
+  const labels = imgs.map((img) => img.alt.replace(/, in the Jotlift app$/, ''));
+  const n = panels.length;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const STEP_MS = 320;
   let at = 0;
 
-  track.style.width = n * 100 + '%';
-  track.innerHTML = SHOTS.map(
-    ([label], i) =>
-      `<div class="phone__panel" style="flex:0 0 ${100 / n}%"><img alt="${label}, in the Jotlift app" data-shot="${i}"${i === 0 ? '' : ' loading="lazy"'}></div>`,
-  ).join('');
-
-  dots.innerHTML = SHOTS.map(
-    ([label], i) =>
-      `<button type="button" role="tab" data-dot="${i}" aria-label="${label}" title="${label}"></button>`,
-  ).join('');
-
-  const imgs = [...track.querySelectorAll('img')];
-  const buttons = [...dots.querySelectorAll('button')];
-
-  /** Serve the dark capture in dark mode and the light one in light mode. The
-   *  subject and the position are untouched: only the image swaps. */
-  function paintShots() {
-    const dark = currentTheme() === 'dark';
+  /* The page chooses the capture from here on, so the theme toggle wins over
+     the device setting the <picture> sources were written against. */
+  panels.forEach((p) => p.querySelectorAll('source').forEach((s) => s.remove()));
+  function paint() {
+    const mode = currentTheme();
     imgs.forEach((img, i) => {
-      const src = dark ? SHOTS[i][1] : SHOTS[i][2];
+      const src = `/assets/img/screens/${panels[i].dataset.shot}-${mode}.webp`;
       if (img.getAttribute('src') !== src) img.setAttribute('src', src);
     });
   }
 
-  function show(index) {
-    at = ((index % n) + n) % n;
-    track.style.transform = `translateX(-${(at * 100) / n}%)`;
+  dots.innerHTML = labels
+    .map((label, i) => `<button type="button" data-dot="${i}" aria-label="${label}" aria-current="${i === 0}"></button>`)
+    .join('');
+  const buttons = [...dots.querySelectorAll('button')];
+
+  function place(panel, x, animate) {
+    panel.style.transition = animate
+      ? reduce.matches
+        ? 'opacity 160ms linear'
+        : `transform ${STEP_MS}ms cubic-bezier(0.2, 0, 0, 1)`
+      : 'none';
+    if (reduce.matches) {
+      panel.style.transform = 'none';
+      panel.style.opacity = x === 0 ? '1' : '0';
+    } else {
+      panel.style.opacity = '1';
+      panel.style.transform = `translateX(${x * 100}%)`;
+    }
+  }
+
+  function show(index, dir = 1) {
+    const next = ((index % n) + n) % n;
+    if (next === at) return;
+    const from = panels[at];
+    const to = panels[next];
+    to.hidden = false;
+    from.style.zIndex = '0';
+    to.style.zIndex = '1';
+    place(to, dir, false);
+    void to.offsetWidth;
+    place(to, 0, true);
+    place(from, -dir, true);
+    const leaving = at;
+    setTimeout(() => {
+      if (leaving !== at) panels[leaving].hidden = true;
+    }, STEP_MS + 40);
+    at = next;
+    caption.textContent = labels[at];
     buttons.forEach((b, i) => b.setAttribute('aria-current', String(i === at)));
   }
 
   buttons.forEach((b, i) =>
     b.addEventListener('click', () => {
-      show(i);
+      show(i, i > at ? 1 : -1);
       restart();
     }),
   );
+  dots.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    show(at + dir, dir);
+    buttons[at].focus();
+    restart();
+  });
 
-  /* Slow enough to read one screen, and stopped while the tab is hidden. */
+  /* A horizontal swipe on the screen steps it, the way a phone would. */
+  let startX = null;
+  screen.addEventListener('pointerdown', (e) => { startX = e.clientX; });
+  screen.addEventListener('pointerup', (e) => {
+    if (startX == null) return;
+    const dx = e.clientX - startX;
+    startX = null;
+    if (Math.abs(dx) < 40) return;
+    const dir = dx < 0 ? 1 : -1;
+    show(at + dir, dir);
+    restart();
+  });
+
+  /* Slow enough to read one screen. Paused while the reader is pointing at it
+     or has focus in it, and while the tab is hidden. */
+  const hero = document.querySelector('[data-hero]');
+  let paused = false;
+  hero.addEventListener('pointerenter', () => { paused = true; });
+  hero.addEventListener('pointerleave', () => { paused = false; });
+  hero.addEventListener('focusin', () => { paused = true; });
+  hero.addEventListener('focusout', () => { paused = false; });
+
   let timer = null;
   function restart() {
-    if (timer) clearInterval(timer);
+    clearInterval(timer);
     timer = setInterval(() => {
-      if (document.hidden) return;
-      show(at + 1);
+      if (!paused && !document.hidden) show(at + 1, 1);
     }, 4600);
   }
 
-  document.addEventListener('jotlift:theme', paintShots);
-
-  paintShots();
-  show(0);
+  document.addEventListener('jotlift:theme', paint);
+  paint();
+  panels.forEach((p, i) => {
+    p.hidden = i !== 0;
+    place(p, i === 0 ? 0 : 1, false);
+  });
+  /* The later captures load once the page has, so a step never lands on a
+     blank screen. */
+  window.addEventListener('load', () => imgs.forEach((img) => { img.loading = 'eager'; }));
   restart();
 }
+
+/* --------------------------------------------------------------- the tick */
+
+/* The exercise card's tick logs the greyed set, as it does in the logger: the
+   row tints, the numbers firm up, and the tick pops on the reward curve. */
+document.querySelectorAll('[data-tick]').forEach((tick) =>
+  tick.addEventListener('click', () => {
+    const on = tick.getAttribute('aria-pressed') !== 'true';
+    const rowEl = tick.closest('.setrow');
+    tick.setAttribute('aria-pressed', String(on));
+    rowEl.classList.toggle('setrow--logged', on);
+    rowEl.classList.toggle('setrow--ghost', !on);
+    tick.classList.remove('is-popping');
+    if (on) {
+      void tick.offsetWidth;
+      tick.classList.add('is-popping');
+    }
+  }),
+);
