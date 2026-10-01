@@ -459,6 +459,32 @@ export function dateTime(ms) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hours}:${minutes} ${suffix}`;
 }
 
+/** "2026-09", the month a timestamp falls in, in local time. History pages by it. */
+export function monthKeyOf(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "September 2026". */
+export function monthTitle(key) {
+  const [y, m] = key.split('-').map(Number);
+  return `${FULL_MONTHS[m - 1]} ${y}`;
+}
+
+/** "Sep", for a row's date block. */
+export function monthShort(ms) {
+  return MONTHS[new Date(ms).getMonth()];
+}
+
+/** "Tuesday 1 September", a calendar day's spoken name. */
+export function dayName(ms) {
+  const d = new Date(ms);
+  return `${FULL_DAYS[d.getDay()]} ${d.getDate()} ${FULL_MONTHS[d.getMonth()]}`;
+}
+
 /** "1h 12m" / "34m". No seconds, no padding. */
 export function durationText(durationMs) {
   const totalMinutes = Math.max(0, Math.round(durationMs / 60000));

@@ -4,6 +4,7 @@
 
 import { chromium } from 'playwright';
 import { buildFeed } from './sample-feed.mjs';
+import { buildModel, materialise } from '../assets/js/dashboard/store.js';
 
 const BASE = 'http://127.0.0.1:8099';
 const FEED = buildFeed();
@@ -107,6 +108,67 @@ console.log('\n— active subscription, full read —');
   check((await page.textContent('.tab-head__meta')).includes('10 workouts'), 'all ten workouts materialised');
   check(errors.length === 0, 'no page errors', errors.join('|'));
   await page.context().close();
+}
+
+console.log('\n— history: each month, its records, and a day opening its workout —');
+{
+  const model = buildModel(materialise(FEED), { cutoff: Infinity });
+  const { page, ctx } = await open();
+  const chip = (n) => (n ? `${n} ${n === 1 ? 'record' : 'records'}` : null);
+  check(model.recordsBySession.size > 0, 'the sample log sets at least one record');
+
+  // Walk back through every month the log has, checking each page against the
+  // model's own derivation: the chip on each row, and a gold ring on exactly
+  // the days that hold a record.
+  let months = 0;
+  let chipsSeen = 0;
+  for (;;) {
+    months += 1;
+    const rows = await page.$$eval('[data-session-row]', (els) =>
+      els.map((e) => [e.dataset.sessionRow, e.querySelector('.session__meta .pill--record')?.textContent.trim() ?? null]));
+    const wrong = rows.filter(([id, text]) => text !== chip(model.recordsBySession.get(id) || 0));
+    chipsSeen += rows.filter(([, text]) => text).length;
+    const title = (await page.textContent('.cal__title')).trim();
+    check(rows.length > 0 && wrong.length === 0, `${title}: every row carries the chip the app derives`, JSON.stringify(wrong));
+
+    const days = await page.$$eval('[data-day]', (els) =>
+      els.map((e) => ({ id: e.dataset.day, ring: e.classList.contains('day--rec'), label: e.getAttribute('aria-label') })));
+    const ringWrong = days.filter((d) => d.ring !== /record/.test(d.label));
+    check(ringWrong.length === 0, `${title}: a ring exactly where the day's label says record`, JSON.stringify(ringWrong));
+
+    const previous = page.locator('.cal__nav [aria-label="Previous month"]');
+    if (await previous.isDisabled()) break;
+    await previous.click();
+    await page.waitForTimeout(150);
+    check((await page.textContent('.cal__title')).trim() !== title, 'the arrow pages to the month before');
+  }
+  check(months > 1, 'the sample log spans more than one month', String(months));
+  check(chipsSeen === model.recordsBySession.size, 'every record in the log was shown once', `${chipsSeen}/${model.recordsBySession.size}`);
+
+  const day = page.locator('[data-day]').first();
+  const id = await day.getAttribute('data-day');
+  await day.click();
+  await page.waitForTimeout(150);
+  check((await page.getAttribute(`[data-session="${id}"]`, 'aria-expanded')) === 'true', 'a trained day opens its workout');
+  check(await page.isVisible(`[data-session-row="${id}"] .session__detail`), 'and its sets are on screen');
+  await ctx.close();
+}
+
+console.log('\n— exercises: a muscle chip filters the library —');
+{
+  const { page, ctx } = await open();
+  await page.click('[data-tab="exercises"]');
+  await page.waitForSelector('.ex-group');
+  const all = await page.locator('.ex-group').count();
+  const muscle = page.locator('[data-ex-cat]').nth(1);
+  const name = (await muscle.textContent()).trim();
+  await muscle.click();
+  const groups = await page.locator('.ex-group > h3').allTextContents();
+  check(groups.length === 1 && groups[0].trim() === name, `choosing ${name} leaves only ${name}`, groups.join(','));
+  check((await page.getAttribute('[data-ex-cat]:nth-child(2)', 'aria-pressed')) === 'true', 'and the chip reads as chosen');
+  await page.click('[data-ex-cat=""]');
+  check((await page.locator('.ex-group').count()) === all, 'All brings the whole library back');
+  await ctx.close();
 }
 
 console.log('\n— a large feed, as the relay returns it —');

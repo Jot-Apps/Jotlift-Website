@@ -21,6 +21,7 @@ import './frame-guard.js';
 import { initTheme } from '../theme.js';
 import { APP_STORE_URL, applyAppLink } from '../app-link.js';
 import { icon } from '../icons.js';
+import { placeThumbs, watchThumbs } from '../segmented.js';
 import * as api from './api.js';
 import { materialise, buildModel } from './store.js';
 import { priceRow, savedCountry, planPrices, TRIAL_LINE } from '../prices.js';
@@ -42,13 +43,14 @@ initTheme();
 const root = document.querySelector('[data-dash-root]');
 const esc = views.esc;
 
+/* Each tab with the glyph the app gives its nearest screen (_layout.tsx). */
 const TABS = [
-  ['history', 'History'],
-  ['progress', 'Progress'],
-  ['exercises', 'Exercises'],
-  ['routines', 'Routines'],
-  ['export', 'Export'],
-  ['account', 'Account'],
+  ['history', 'History', 'clockBack'],
+  ['progress', 'Progress', 'chart'],
+  ['exercises', 'Exercises', 'figure'],
+  ['routines', 'Routines', 'listRect'],
+  ['export', 'Export', 'share'],
+  ['account', 'Account', 'gear'],
 ];
 
 const state = {
@@ -63,6 +65,11 @@ const state = {
 
   tab: 'history',
   openSession: null,
+  // The month History is showing, as "2026-09". Null is the newest one.
+  historyMonth: null,
+  exerciseCategory: null,
+  // Which way the weight step's digits roll on the render after a change.
+  stepRoll: null,
   progressExercise: null,
   metric: null,
   pickerOpen: false,
@@ -175,6 +182,9 @@ function render() {
   else return;
 
   applyAppLink();
+  placeThumbs(root);
+  watchThumbs();
+  state.stepRoll = null;
 
   /* A reorder rebuilds the list, and a fresh button never has the focus the one
    * it replaced was holding. Without this, moving a row with the keyboard moves
@@ -332,7 +342,7 @@ function upgrade() {
           <a class="btn btn--lg" href="${APP_STORE_URL}" rel="noopener" data-app-link>Subscribe in the app</a>
           <span style="font-size:15px" class="quiet">${esc(planPrices(row))}</span>
         </div>
-        <p style="margin:16px 0 0;font-size:14px" class="decorative">Subscriptions are billed by your app store. ${esc(TRIAL_LINE)}</p>
+        <p style="margin:16px 0 0;font-size:14px" class="quiet">Subscriptions are billed by your app store. ${esc(TRIAL_LINE)}</p>
       </div>
 
       <p style="margin:24px 0 0;font-size:15px" class="quiet">Your free account keeps backing up, and restoring is free forever. <a href="/pricing/" style="font-weight:600">See pricing</a></p>
@@ -385,10 +395,12 @@ function dashboard() {
               ? views.renderExport(model, state)
               : views.renderAccount(model, state);
 
-  const nav = TABS.map(
-    ([id, label]) =>
-      `<button type="button" data-tab="${id}" aria-current="${id === state.tab}">${label}</button>`,
-  ).join('');
+  const nav = (size) =>
+    TABS.map(
+      ([id, label, glyph]) =>
+        `<button type="button" data-tab="${id}" aria-current="${id === state.tab}">${icon(glyph, size)}<span>${label}</span></button>`,
+    ).join('');
+  const title = TABS.find(([id]) => id === state.tab)[1];
 
   return `
     <section class="shell-dash dash-wrap" style="padding-bottom:96px"
@@ -396,19 +408,20 @@ function dashboard() {
              data-condition="${readOnly ? "useEntitlement() === 'lapsed'" : "useEntitlement() === 'active' && workouts.length > 0"}">
       ${banner}
       ${notice()}
-      <div class="dash-head">
-        <div>
-          <p class="dash-head__email">${esc(state.user?.email || '')}</p>
-          <h1>Your log</h1>
+      <div class="dash-body">
+        <nav class="dash-rail" aria-label="Dashboard">${nav(22)}</nav>
+        <div class="dash-main">
+          <div class="dash-head">
+            <div>
+              <p class="dash-head__email">${esc(state.user?.email || '')}</p>
+              <h1>${title}</h1>
+            </div>
+          </div>
+          ${body}
         </div>
       </div>
-
-      <div class="dash-body">
-        <nav class="dash-rail" aria-label="Dashboard">${nav}</nav>
-        <div class="dash-main">${body}</div>
-      </div>
     </section>
-    <nav class="dash-tabbar" aria-label="Dashboard">${nav}</nav>
+    <nav class="dash-tabbar" aria-label="Dashboard">${nav(22)}</nav>
     ${views.confirmDialog()}`;
 }
 
@@ -480,6 +493,33 @@ function onClick(e) {
       state.message = 'We could not open that sign-in. Try email and password.';
       render();
     });
+    return;
+  }
+
+  const month = target('[data-month]');
+  if (month) {
+    state.historyMonth = month.dataset.month;
+    state.openSession = null;
+    render();
+    return;
+  }
+
+  /* A trained day opens its workout in the list beside it, the way the app's
+     day opens the workout. */
+  const day = target('[data-day]');
+  if (day) {
+    state.openSession = day.dataset.day;
+    render();
+    const row = root.querySelector(`[data-session-row="${CSS.escape(day.dataset.day)}"]`);
+    row?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    row?.querySelector('[data-session]')?.focus({ preventScroll: true });
+    return;
+  }
+
+  const exCat = target('[data-ex-cat]');
+  if (exCat) {
+    state.exerciseCategory = exCat.dataset.exCat || null;
+    render();
     return;
   }
 
@@ -1036,6 +1076,7 @@ async function changeWeightStep(delta) {
     { failure: 'We could not save the weight step. Nothing changed.' },
   );
   if (!ok) return;
+  state.stepRoll = next > current ? 'up' : 'down';
   render();
   flash('[data-step-saved]', `Weight step saved. Every device steps by ${next} now.`);
 }
