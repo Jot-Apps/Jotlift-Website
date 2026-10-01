@@ -3,10 +3,11 @@
 The public site at [jotlift.app](https://jotlift.app), plus the signed-in Pro
 dashboard at `/dashboard`.
 
-Built from `design_handoff_jotlift_web` on the Jot Core design system. Every
-colour, size, radius, shadow and timing resolves to a token in
-`assets/css/tokens/`, which are the design system's own files, copied
-unmodified. Nothing invents a value.
+Built on the Jot Core design system and kept in step with the app. The files in
+`assets/css/tokens/` are the design system's own, copied unmodified. Jotlift's
+app layer is re-pointed at the top of `assets/css/site.css` to the values the
+app ships in `src/theme/` (colours, elevation, motion), which is the one place a
+Jot app is meant to override. When the app's tokens move, move that block.
 
 ## How it is served
 
@@ -30,14 +31,25 @@ One folder per route:
 Every public page works with JavaScript turned off. The dashboard does not, and
 says so.
 
+Appearance follows the device until the reader chooses: `<html>` carries no
+`data-theme` and the stylesheet reads `prefers-color-scheme`. The header toggle
+records a choice, which the inline script in each `<head>` applies before first
+paint.
+
+The hero captures have their status band painted out on export, and the page
+draws a clean 9:41 bar over it, so a capture never carries a real clock, battery
+or live activity. To replace one, export the new capture at 1206x2622, fill the
+top 166 rows with the screen's own canvas colour, and save it as WebP under the
+same name.
+
 ## Layout
 
 ```
 assets/css/tokens/   the Jot Core token files, copied unmodified
-assets/css/site.css  the design system realised as classes
-assets/js/           theme, icons, prices, the hero walk
+assets/css/site.css  Jotlift's app layer, then the app's controls as classes
+assets/js/           theme, icons, prices, the segmented thumb, the hero walk
 assets/js/dashboard/ the signed-in surface
-assets/img/screens/  eight real app captures (1206x2622), light and dark
+assets/img/screens/  seven real app captures (1206x2622, WebP), light and dark
 data/                the App Store price table (weekly, monthly, yearly)
 tools/                the checks: domain rules, the relay, the page guards
 ```
@@ -106,12 +118,24 @@ carries on. Export is never gated by subscription status.
 dashboard and the phone can never print different numbers for the same log. Each
 block names the file it came from: the progression walk and the protected floor
 (`src/engine/`), Epley and its half-unit grid, relative strength, the volume
-function, and the two set-type predicates.
+function, the two set-type predicates, and the record rule
+(`recordAsOfItsDate`, `src/features/charts/logic/series.ts`) behind History's
+gold chip and calendar ring and the chart's gold points.
 
 `tools/domain.test.mjs` checks that port against the app's own test cases:
 
 ```
 node tools/domain.test.mjs
+```
+
+The browser checks need Playwright's Chromium. `security.test.mjs` and
+`app-link.test.mjs` serve the site themselves; `relay.test.mjs` drives the
+dashboard against mock relay functions and expects the site served on
+`127.0.0.1:8099`:
+
+```
+npx http-server -p 8099 -s -c-1 . &
+node tools/relay.test.mjs
 ```
 
 ## Changing the app-store link

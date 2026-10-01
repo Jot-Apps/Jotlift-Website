@@ -149,10 +149,6 @@ export function estimateText(milli, recordedIn, render) {
   return render.text(roundEstimateMilli(render.milli(milli, recordedIn)), render.unit);
 }
 
-/** A total nobody lifted, so it is rounded to a whole unit and grouped. */
-export function volumeText(volumeMilli, recordedIn, render) {
-  return `${Math.round(render.value(volumeMilli, recordedIn)).toLocaleString('en-US')} ${render.unit}`;
-}
 
 /* ==================== src/features/charts/logic/relative-strength.ts */
 

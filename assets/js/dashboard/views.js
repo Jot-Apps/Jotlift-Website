@@ -12,7 +12,6 @@ import {
   setVolumeMilli,
   estimatedOneRepMaxMilli,
   estimateText,
-  volumeText,
   relativeStrength,
   relativeStrengthText,
   repsText,

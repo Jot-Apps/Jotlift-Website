@@ -165,7 +165,6 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 img { max-width: 100%; }
 
-.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -315,12 +314,13 @@ img { max-width: 100%; }
 .pill--danger  { background: var(--color-danger-soft);  color: var(--color-danger); }
 .pill--record  { background: var(--color-record-soft);  color: var(--color-record); }
 
-/* TextField: one tone off its ground, and it keeps its hairline (C7). */
+/* TextField: one tone off its ground, and it keeps its hairline (C7). Fields
+   live in cards, so they sit on surface; in a canvas well they step up. */
 .field { display: flex; flex-direction: column; gap: var(--space-2); width: 100%; }
 .field__label { font-size: 15px; font-weight: 600; color: var(--color-text); }
 .field__box {
   position: relative; display: flex; align-items: center; gap: var(--space-2);
-  background: var(--color-elevated); border: 1px solid var(--color-hairline);
+  background: var(--color-surface); border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md); padding: 0 var(--space-3); min-height: 48px;
   transition: border-color var(--motion-quick) var(--ease-decel);
 }
@@ -381,7 +381,6 @@ img { max-width: 100%; }
   transition: transform var(--motion-quick) var(--ease-decel), width var(--motion-quick) var(--ease-decel),
               background-color var(--motion-standard) var(--ease-decel-in);
 }
-.segmented--full { display: grid; width: 100%; }
 
 /* Chip (src/ui/Chip.tsx): surface, and when chosen accent-soft with a check. */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -584,7 +583,6 @@ img { max-width: 100%; }
 /* The tick pop: a reward, so it springs on the emphasis curve. */
 .tick.is-popping { animation: tick-pop var(--motion-emphasis) var(--ease-reward); }
 @keyframes tick-pop { from { transform: scale(0.7); } to { transform: scale(1); } }
-.ex-card__hint { margin: 10px 0 0; font-size: 13px; line-height: 18px; color: var(--color-text-quiet); }
 
 /* The run the engine counted. One grid, three columns sized once, so the
    weights line up down the card instead of per row. */
@@ -988,7 +986,6 @@ img { max-width: 100%; }
   background: var(--color-elevated); border-radius: var(--radius-lg); box-shadow: var(--elev-2);
   padding: 24px; margin-bottom: 20px; animation: sheet-in var(--motion-standard) var(--ease-decel-in);
 }
-.ex-panel--create .field__box { background: var(--color-surface); }
 .ex-panel__note { margin: 14px 0 0; font-size: 14px; line-height: 1.55; color: var(--color-text-quiet); max-width: 62ch; }
 .ex-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 18px 24px; margin-bottom: 18px; }
 .ex-facts p:first-child { margin: 0 0 2px; font-size: 13px; color: var(--color-text-quiet); }
@@ -1038,7 +1035,6 @@ img { max-width: 100%; }
 .routine-detail__head h3 { margin: 0; font-size: 20px; font-weight: 600; color: var(--color-text); }
 .routine-detail__counts { margin: 6px 0 0; display: flex; gap: 10px; font-size: 13px; color: var(--color-text-quiet); font-variant-numeric: tabular-nums; }
 .routine-detail__hint { font-size: 14px; color: var(--color-text-quiet); }
-.routine-detail .field__box { background: var(--color-surface); }
 .routine-table { border-radius: var(--radius-md); overflow: hidden; background: var(--color-surface); }
 .routine-table__row { display: grid; grid-template-columns: 30px 22px minmax(0, 1fr) 72px 100px 40px; gap: 10px; padding: 10px 16px; font-size: 16px; align-items: center; min-height: 48px; }
 .routine-table__head + [data-routine-rows] .routine-block:first-child,
@@ -1170,7 +1166,6 @@ button.routine-open { cursor: pointer; }
 
 /* Export */
 .export-card { background: var(--color-elevated); border-radius: var(--radius-lg); box-shadow: var(--elev-1); padding: 20px; max-width: 560px; }
-.export-card .field__box { background: var(--color-surface); }
 .export-dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 22px; }
 .export-dates input { color-scheme: inherit; }
 .export-label { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--color-text); }
