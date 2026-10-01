@@ -174,6 +174,28 @@ console.log('\n— history: each month, its records, and a day opening its worko
   await ctx.close();
 }
 
+console.log('\n— history: a day with two workouts rings for either one —');
+{
+  // An earlier, empty workout on the same day as one that set a record, so
+  // the day's first workout set none and its second did.
+  const model = buildModel(materialise(FEED), { cutoff: Infinity });
+  const recordId = [...model.recordsBySession.keys()].map((id) => model.sessions.find((x) => x.id === id))
+    .sort((a, b) => b.startedAt - a.startedAt)[0].id;
+  const base = FEED.find((r) => r.entity_table === 'workouts' && r.entity_id === recordId);
+  const earlier = base.payload.startedAt - 3600000;
+  const rows = FEED.concat([{ ...base, seq: 99998, entity_id: 'w-early',
+    payload: { ...base.payload, id: 'w-early', title: 'Mobility', startedAt: earlier, endedAt: earlier + 1200000 } }]);
+  const { page, ctx } = await open({ rows });
+  for (;;) {
+    if (await page.locator('[data-day="w-early"]').count()) break;
+    await page.click('.cal__nav [aria-label="Previous month"]');
+  }
+  const day = page.locator('[data-day="w-early"]');
+  check(/2 workouts/.test(await day.getAttribute('aria-label')), 'the day holds both workouts');
+  check(await day.evaluate((e) => e.classList.contains('day--rec')), 'and rings for the record the second one set');
+  await ctx.close();
+}
+
 console.log('\n— history: a workout dated ahead never makes a future day or month —');
 {
   // Another device with a clock running fast logs a workout three days ahead.
