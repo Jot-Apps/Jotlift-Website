@@ -537,11 +537,12 @@ img { max-width: 100%; }
 .phone__dots { gap: 0; }
 .phone__dots button { margin: 0 4px; }
 .phone__dots button::after { content: ""; position: absolute; inset: -18px -8px; }
-.phone__pause {
-  margin-left: 8px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0;
+.phone__dots .phone__pause {
+  margin: 0 0 0 12px; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; opacity: 1;
   border: 0; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text-quiet); cursor: pointer;
 }
-.phone__pause:hover { color: var(--color-text); }
+.phone__dots .phone__pause::after { inset: -4px; }
+.phone__dots .phone__pause:hover { color: var(--color-text); }
 .phone__pause svg { display: block; }
 .phone__pause .icon-play { display: none; }
 .phone__pause[aria-pressed="true"] .icon-play { display: block; }
