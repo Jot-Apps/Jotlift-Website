@@ -17,6 +17,8 @@ import {
   derive,
   isRepOnly,
   weekStart,
+  isRecord,
+  recordAsOfItsDate,
 } from './domain.js';
 
 /**
@@ -204,6 +206,28 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
     }
   }
 
+  /* Records, as of each workout's own date (records.ts): how many exercises in
+   * a workout set one, for History's gold chip and the calendar's ring. One
+   * exercise placed twice in a workout is one session of it, so placements fold
+   * by workout first, the way the app's history read folds them. */
+  const recordsBySession = new Map();
+  const recordExercisesBySession = new Map();
+  for (const [exerciseId, placements] of historyByExercise) {
+    const exercise = exercisesById.get(exerciseId);
+    const folded = [];
+    for (const p of placements) {
+      const last = folded[folded.length - 1];
+      if (last && last.workoutId === p.workoutId) last.sets = last.sets.concat(p.sets);
+      else folded.push({ workoutId: p.workoutId, startedAt: p.startedAt, sets: p.sets });
+    }
+    const assisted = exercise?.bodyweightSubtype === 'assisted';
+    for (const session of folded) {
+      if (!isRecord(recordAsOfItsDate(folded, session, assisted))) continue;
+      recordsBySession.set(session.workoutId, (recordsBySession.get(session.workoutId) || 0) + 1);
+      group(recordExercisesBySession, session.workoutId, exerciseId);
+    }
+  }
+
   /* The protected floor per exercise, from the engine's own walk. Warmups are
    * excluded before the engine sees them, and the walk reads working sets only. */
   const floorByExercise = new Map();
@@ -356,6 +380,8 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
     weeks,
     totals,
     historyByExercise,
+    recordsBySession,
+    recordExercisesBySession,
     floorByExercise,
     lastDoneByExercise,
     routines,

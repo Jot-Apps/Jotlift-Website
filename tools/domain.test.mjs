@@ -24,6 +24,10 @@ import {
   countsInTotals,
   durationText,
   weekStart,
+  detectPRs,
+  checkPR,
+  isRecord,
+  recordAsOfItsDate,
 } from '../assets/js/dashboard/domain.js';
 import {
   fmt,
@@ -334,6 +338,79 @@ test('a week starts on Monday', () => {
   const wednesday = new Date(2026, 8, 2, 15, 0, 0).getTime();
   const monday = new Date(2026, 7, 31, 0, 0, 0).getTime();
   assert.equal(weekStart(wednesday), monday);
+});
+
+/* ------------------------------------------------ records (series.test.ts) */
+
+const rs = (partial) => ({ setType: 'working', weightMilli: null, reps: 0, ...partial });
+const rsession = (startedAt, sets) => ({ startedAt, sets });
+const flags = (history, assisted = false) =>
+  [...history].sort((a, b) => a.startedAt - b.startedAt).map((s) => isRecord(recordAsOfItsDate(history, s, assisted)));
+
+test('detectPRs finds heaviest weight, best 1RM, and most reps across history', () => {
+  const prs = detectPRs([
+    rsession(300, [rs({ weightMilli: 100_000, reps: 3 })]),
+    rsession(200, [rs({ weightMilli: 90_000, reps: 8 })]),
+    rsession(100, [rs({ weightMilli: 80_000, reps: 5 })]),
+  ]);
+  assert.equal(prs.heaviestWeightMilli, 100_000);
+  assert.equal(prs.bestEstimatedOneRepMaxMilli, 114_000);
+  assert.deepEqual(prs.bestReps, { reps: 8, atWeightMilli: 90_000 });
+});
+
+test('detectPRs ignores warmups', () => {
+  const prs = detectPRs([rsession(100, [rs({ setType: 'warmup', weightMilli: 200_000, reps: 1 }), rs({ weightMilli: 90_000, reps: 5 })])]);
+  assert.equal(prs.heaviestWeightMilli, 90_000);
+});
+
+test('checkPR: a new heaviest, a new rep record, a new estimate; a tie is none', () => {
+  const prior = [rsession(100, [rs({ weightMilli: 80_000, reps: 5 })])];
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 90_000, reps: 3 })] }, false).heaviestWeight, true);
+  const tie = checkPR(prior, { sets: [rs({ weightMilli: 80_000, reps: 5 })] }, false);
+  assert.equal(isRecord(tie), false);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 80_000, reps: 8 })] }, false).reps, true);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 85_000, reps: 5 })] }, false).estimatedOneRepMax, true);
+});
+
+test('checkPR never fires on a first-ever log (D86)', () => {
+  assert.equal(isRecord(checkPR([], { sets: [rs({ weightMilli: 200_000, reps: 12 })] }, false)), false);
+});
+
+test('checkPR on an assisted lift: less help is the record, more never is', () => {
+  const prior = [rsession(100, [rs({ weightMilli: 30_000, reps: 5 })])];
+  assert.deepEqual(checkPR(prior, { sets: [rs({ weightMilli: 25_000, reps: 5 })] }, true), {
+    heaviestWeight: false, leastAssistance: true, estimatedOneRepMax: false, reps: false,
+  });
+  assert.equal(isRecord(checkPR(prior, { sets: [rs({ weightMilli: 40_000, reps: 5 })] }, true)), false);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 0, reps: 5 })] }, true).leastAssistance, true);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: null, reps: 5 })] }, true).leastAssistance, false);
+});
+
+test('records as of their own date, in order, never the first', () => {
+  assert.deepEqual(flags([
+    rsession(400, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(300, [rs({ weightMilli: 65_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 60_000, reps: 5 })]),
+  ]), [false, true, false, false]);
+});
+
+test('a record is not undone by a later, heavier session', () => {
+  assert.deepEqual(flags([
+    rsession(300, [rs({ weightMilli: 90_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 60_000, reps: 5 })]),
+  ]), [false, true, true]);
+});
+
+test('an assisted lift reads the other way round', () => {
+  assert.deepEqual(flags([
+    rsession(500, [rs({ weightMilli: 20_000, reps: 7 })]),
+    rsession(400, [rs({ weightMilli: 20_000, reps: 5 })]),
+    rsession(300, [rs({ weightMilli: 20_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 40_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 30_000, reps: 5 })]),
+  ], true), [false, false, true, false, true]);
 });
 
 /* -------------------------------------------------------------- prices */
