@@ -17,6 +17,8 @@ import {
   derive,
   isRepOnly,
   weekStart,
+  isRecord,
+  recordAsOfItsDate,
 } from './domain.js';
 
 /**
@@ -195,12 +197,44 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
   for (let i = sessions.length - 1; i >= 0; i--) {
     const session = sessions[i];
     for (const entry of session.entries) {
+      // One exercise placed twice in a workout is ONE session of it, the way the
+      // app's history read folds it, so the chart, the floor walk and the record
+      // rule all count a workout once.
+      const list = historyByExercise.get(entry.exercise.id);
+      const last = list && list[list.length - 1];
+      if (last && last.workoutId === session.id) {
+        last.sets = last.sets.concat(entry.sets);
+        continue;
+      }
       group(historyByExercise, entry.exercise.id, {
         workoutId: session.id,
         startedAt: session.startedAt,
         sets: entry.sets,
         exercise: entry.exercise,
       });
+    }
+  }
+
+  /* Records, as of each workout's own date (records.ts): how many exercises in
+   * a workout set one, for History's gold chip and the calendar's ring. One
+   * exercise placed twice in a workout is one session of it, so placements fold
+   * by workout first, the way the app's history read folds them. */
+  const recordsBySession = new Map();
+  // The set that carried a weight record, for the gold word beside it in a past
+  // workout (workout-record.ts): the heaviest working set, or on an assisted
+  // lift the least assistance, first in logged order.
+  const recordSetIds = new Set();
+  for (const [exerciseId, folded] of historyByExercise) {
+    const assisted = exercisesById.get(exerciseId)?.bodyweightSubtype === 'assisted';
+    for (const session of folded) {
+      const hit = recordAsOfItsDate(folded, session, assisted);
+      if (!isRecord(hit)) continue;
+      recordsBySession.set(session.workoutId, (recordsBySession.get(session.workoutId) || 0) + 1);
+      const working = session.sets.filter((set) => countsAsWorking(set.setType) && set.weightMilli != null);
+      const weights = working.map((set) => set.weightMilli);
+      const target = hit.heaviestWeight ? Math.max(...weights) : hit.leastAssistance ? Math.min(...weights) : null;
+      const carrier = target == null ? null : working.find((set) => set.weightMilli === target);
+      if (carrier) recordSetIds.add(carrier.id);
     }
   }
 
@@ -356,6 +390,8 @@ export function buildModel(tables, { cutoff = Infinity } = {}) {
     weeks,
     totals,
     historyByExercise,
+    recordsBySession,
+    recordSetIds,
     floorByExercise,
     lastDoneByExercise,
     routines,

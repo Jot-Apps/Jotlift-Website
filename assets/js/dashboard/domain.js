@@ -149,10 +149,6 @@ export function estimateText(milli, recordedIn, render) {
   return render.text(roundEstimateMilli(render.milli(milli, recordedIn)), render.unit);
 }
 
-/** A total nobody lifted, so it is rounded to a whole unit and grouped. */
-export function volumeText(volumeMilli, recordedIn, render) {
-  return `${Math.round(render.value(volumeMilli, recordedIn)).toLocaleString('en-US')} ${render.unit}`;
-}
 
 /* ==================== src/features/charts/logic/relative-strength.ts */
 
@@ -182,6 +178,91 @@ export function relativeStrengthText(ratio) {
 export function repsText(reps, atWeightMilli, recordedIn, render) {
   if (atWeightMilli == null) return String(reps);
   return `${reps} at ${render.text(atWeightMilli, recordedIn)}`;
+}
+
+/* =============================== src/features/charts/logic/series.ts */
+
+/**
+ * The bests across a history of sessions, each `{ startedAt, sets }`. Working
+ * sets only. `bestReps` ties break toward the heavier weight.
+ */
+export function detectPRs(history) {
+  let heaviestWeightMilli = null;
+  let bestEstimatedOneRepMaxMilli = null;
+  let bestReps = null;
+  for (const session of history) {
+    for (const set of session.sets) {
+      if (!countsAsWorking(set.setType)) continue;
+      if (set.weightMilli != null) {
+        if (heaviestWeightMilli == null || set.weightMilli > heaviestWeightMilli) heaviestWeightMilli = set.weightMilli;
+        const e1rm = estimatedOneRepMaxMilli(set.weightMilli, set.reps);
+        if (e1rm != null && (bestEstimatedOneRepMaxMilli == null || e1rm > bestEstimatedOneRepMaxMilli)) {
+          bestEstimatedOneRepMaxMilli = e1rm;
+        }
+      }
+      if (
+        bestReps == null ||
+        set.reps > bestReps.reps ||
+        (set.reps === bestReps.reps && (set.weightMilli ?? -1) > (bestReps.atWeightMilli ?? -1))
+      ) {
+        bestReps = { reps: set.reps, atWeightMilli: set.weightMilli };
+      }
+    }
+  }
+  return { heaviestWeightMilli, bestEstimatedOneRepMaxMilli, bestReps };
+}
+
+function lightestWorkingMilli(sessions) {
+  let lightest = null;
+  for (const session of sessions) {
+    for (const set of session.sets) {
+      if (!countsAsWorking(set.setType) || set.weightMilli == null) continue;
+      if (lightest == null || set.weightMilli < lightest) lightest = set.weightMilli;
+    }
+  }
+  return lightest;
+}
+
+/**
+ * Which records a candidate set against a prior history. A record must strictly
+ * beat a PRIOR best, so a first log never fires (D86) and a tie is not one.
+ * An assisted lift is inverted: less assistance is the weight record.
+ */
+export function checkPR(history, candidate, assisted) {
+  const prior = detectPRs(history);
+  const next = detectPRs([{ sets: candidate.sets }]);
+  const beats = (a, b) => a != null && b != null && a > b;
+  const reps = beats(next.bestReps?.reps ?? null, prior.bestReps?.reps ?? null);
+  if (assisted) {
+    const least = lightestWorkingMilli([candidate]);
+    const priorLeast = lightestWorkingMilli(history);
+    return {
+      heaviestWeight: false,
+      leastAssistance: least != null && priorLeast != null && least < priorLeast,
+      estimatedOneRepMax: false,
+      reps,
+    };
+  }
+  return {
+    heaviestWeight: beats(next.heaviestWeightMilli, prior.heaviestWeightMilli),
+    leastAssistance: false,
+    estimatedOneRepMax: beats(next.bestEstimatedOneRepMaxMilli, prior.bestEstimatedOneRepMaxMilli),
+    reps,
+  };
+}
+
+export function isRecord(hit) {
+  return hit.heaviestWeight || hit.leastAssistance || hit.estimatedOneRepMax || hit.reps;
+}
+
+/**
+ * THE ONE RECORD DERIVATION: the records a session set as of its OWN date,
+ * against the sessions that started before it, so a heavier one later never
+ * erases it. History's chip, the calendar's gold ring and the chart's gold
+ * points all ask here, as they do in the app.
+ */
+export function recordAsOfItsDate(history, session, assisted) {
+  return checkPR(history.filter((s) => s.startedAt < session.startedAt), session, assisted);
 }
 
 /* ================================= src/engine/{scheme,rounding,floor}.ts */
@@ -372,6 +453,32 @@ export function dateTime(ms) {
   hours = hours % 12 || 12;
   const minutes = String(d.getMinutes()).padStart(2, '0');
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hours}:${minutes} ${suffix}`;
+}
+
+/** "2026-09", the month a timestamp falls in, in local time. History pages by it. */
+export function monthKeyOf(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "September 2026". */
+export function monthTitle(key) {
+  const [y, m] = key.split('-').map(Number);
+  return `${FULL_MONTHS[m - 1]} ${y}`;
+}
+
+/** "Sep", for a row's date block. */
+export function monthShort(ms) {
+  return MONTHS[new Date(ms).getMonth()];
+}
+
+/** "Tuesday 1 September", a calendar day's spoken name. */
+export function dayName(ms) {
+  const d = new Date(ms);
+  return `${FULL_DAYS[d.getDay()]} ${d.getDate()} ${FULL_MONTHS[d.getMonth()]}`;
 }
 
 /** "1h 12m" / "34m". No seconds, no padding. */

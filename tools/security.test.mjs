@@ -185,6 +185,34 @@ console.log('\n— Chromium enforces the policy —');
   await ctx.close();
 }
 
+/* ------------------------------------- the appearance the pre-paint script sets */
+
+/* With no choice made the page follows the device, as the app does: <html>
+ * carries no data-theme and the stylesheet reads prefers-color-scheme. A choice,
+ * once made, wins in both directions. Asserted on the painted ground and on the
+ * accent a primary button is filled with, so a token that drifted from the
+ * app's (src/theme/colors.ts) reddens here. */
+console.log('\n— appearance follows the device until the reader chooses —');
+for (const [scheme, stored, ground, accent, label] of [
+  ['dark', null, 'rgb(23, 24, 28)', 'rgb(63, 209, 176)', 'a dark device, no choice: dark'],
+  ['light', null, 'rgb(240, 234, 222)', 'rgb(0, 115, 95)', 'a light device, no choice: light'],
+  ['dark', 'light', 'rgb(240, 234, 222)', 'rgb(0, 115, 95)', 'a dark device, light chosen: light'],
+  ['light', 'dark', 'rgb(23, 24, 28)', 'rgb(63, 209, 176)', 'a light device, dark chosen: dark'],
+]) {
+  const ctx = await browser.newContext({ colorScheme: scheme });
+  if (stored) await ctx.addInitScript((t) => localStorage.setItem('jotlift.theme', t), stored);
+  const page = await ctx.newPage();
+  await page.goto(`http://127.0.0.1:${PORT}/`);
+  const seen = await page.evaluate(() => ({
+    attr: document.documentElement.getAttribute('data-theme'),
+    ground: getComputedStyle(document.body).backgroundColor,
+    accent: getComputedStyle(document.querySelector('.btn')).backgroundColor,
+  }));
+  check(seen.attr === stored, `${label}, and data-theme is ${stored ?? 'absent'}`, String(seen.attr));
+  check(seen.ground === ground && seen.accent === accent, `${label}, painted`, `${seen.ground} / ${seen.accent}`);
+  await ctx.close();
+}
+
 /* --------------------------------------------- 3. the dashboard, in a frame */
 
 console.log('\n— the dashboard refuses to run framed —');

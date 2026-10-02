@@ -1,17 +1,26 @@
 /* The appearance toggle.
  *
- * One semantic token set, two modes. The choice is remembered per reader and
- * applied before first paint by the inline script in each page's <head>, so a
- * light-mode reader never sees a dark flash.
+ * One semantic token set, two modes. With no choice made, the page follows the
+ * device, as the app does: the stylesheet reads `prefers-color-scheme` while
+ * <html> carries no `data-theme`. A press records an explicit choice, which
+ * the inline script in each page's <head> applies before first paint.
  *
- * This module only wires the header button and tells the rest of the page when
- * the mode changed (the hero swaps its capture on that event).
+ * This module wires the header button and tells the rest of the page when the
+ * mode changed (the hero swaps its capture on that event), including when the
+ * device itself changes appearance under a reader who never chose.
  */
 
 const KEY = 'jotlift.theme';
+const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
 export function currentTheme() {
-  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const set = document.documentElement.getAttribute('data-theme');
+  if (set === 'light' || set === 'dark') return set;
+  return media && media.matches ? 'dark' : 'light';
+}
+
+function announce() {
+  document.dispatchEvent(new CustomEvent('jotlift:theme', { detail: { theme: currentTheme() } }));
 }
 
 export function setTheme(theme) {
@@ -21,10 +30,13 @@ export function setTheme(theme) {
   } catch {
     // A reader with storage blocked still gets the toggle, just not the memory.
   }
-  document.dispatchEvent(new CustomEvent('jotlift:theme', { detail: { theme } }));
+  announce();
 }
 
 export function initTheme() {
+  media?.addEventListener?.('change', () => {
+    if (!document.documentElement.hasAttribute('data-theme')) announce();
+  });
   const button = document.querySelector('[data-theme-toggle]');
   if (!button) return;
   button.addEventListener('click', () => {

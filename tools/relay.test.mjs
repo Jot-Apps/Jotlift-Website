@@ -4,6 +4,7 @@
 
 import { chromium } from 'playwright';
 import { buildFeed } from './sample-feed.mjs';
+import { buildModel, materialise } from '../assets/js/dashboard/store.js';
 
 const BASE = 'http://127.0.0.1:8099';
 const FEED = buildFeed();
@@ -30,6 +31,11 @@ async function open({ status = 'active', expires = null, rows = FEED, fail = fal
       user: { id: 'f1d1a13c-4145-48ef-bcad-3a9d75e9e1aa', email: 'sam@example.com', provider: 'apple' },
     }));
   });
+
+  // The webfont is a third-party request the dashboard does not depend on, and
+  // it cannot load in a sandbox. Answer it empty so the run is hermetic.
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
 
   await ctx.route(`${PROJECT}/**`, async (route) => {
     const req = route.request();
@@ -102,6 +108,124 @@ console.log('\n— active subscription, full read —');
   check((await page.textContent('.tab-head__meta')).includes('10 workouts'), 'all ten workouts materialised');
   check(errors.length === 0, 'no page errors', errors.join('|'));
   await page.context().close();
+}
+
+console.log('\n— history: each month, its records, and a day opening its workout —');
+{
+  const model = buildModel(materialise(FEED), { cutoff: Infinity });
+  const { page, ctx } = await open();
+  const chip = (n) => (n ? `${n} ${n === 1 ? 'record' : 'records'}` : null);
+  check(model.recordsBySession.size > 0, 'the sample log sets at least one record');
+
+  // Walk back through every month the log has, checking each page against the
+  // model's own derivation: the chip on each row, and a gold ring on exactly
+  // the days that hold a record.
+  let months = 0;
+  let chipsSeen = 0;
+  for (;;) {
+    months += 1;
+    const rows = await page.$$eval('[data-session-row]', (els) =>
+      els.map((e) => [e.dataset.sessionRow, e.querySelector('.session__meta .pill--record')?.textContent.trim() ?? null]));
+    const wrong = rows.filter(([id, text]) => text !== chip(model.recordsBySession.get(id) || 0));
+    chipsSeen += rows.filter(([, text]) => text).length;
+    const title = (await page.textContent('.cal__title')).trim();
+    check(rows.length > 0 && wrong.length === 0, `${title}: every row carries the chip the app derives`, JSON.stringify(wrong));
+
+    // The ring, against the model: every workout on that day, not only the one
+    // the day opens.
+    const dayKey = (ms) => new Date(ms).toDateString();
+    const days = await page.$$eval('[data-day]', (els) =>
+      els.map((e) => ({ id: e.dataset.day, ring: e.classList.contains('day--rec'), label: e.getAttribute('aria-label') })));
+    const ringWrong = days.filter((d) => {
+      const on = model.sessions.find((x) => x.id === d.id);
+      const sum = model.sessions
+        .filter((x) => dayKey(x.startedAt) === dayKey(on.startedAt))
+        .reduce((n, x) => n + (model.recordsBySession.get(x.id) || 0), 0);
+      return d.ring !== sum > 0 || /record/.test(d.label) !== sum > 0;
+    });
+    check(ringWrong.length === 0, `${title}: a gold ring on exactly the days that set a record`, JSON.stringify(ringWrong));
+
+    // Monday first: the blanks before day 1 are that day's place in the week.
+    const [monthName, year] = title.split(' ');
+    const first = new Date(`${monthName} 1, ${year}`);
+    const blanks = await page.$$eval('.cal__grid > *', (els) => els.slice(7).findIndex((e) => e.textContent.trim() === '1'));
+    check(blanks === (first.getDay() + 6) % 7, `${title}: the 1st sits under its weekday, Monday first`, String(blanks));
+
+    const previous = page.locator('.cal__nav [aria-label="Previous month"]');
+    if (await previous.isDisabled()) break;
+    await previous.click();
+    await page.waitForTimeout(150);
+    check((await page.textContent('.cal__title')).trim() !== title, 'the arrow pages to the month before');
+  }
+  check(months > 1, 'the sample log spans more than one month', String(months));
+  const oldest = (await page.textContent('.cal__title')).trim();
+  await page.click('.cal__nav [aria-label="Next month"]');
+  check((await page.textContent('.cal__title')).trim() !== oldest, 'the other arrow pages forward again');
+  check(await page.evaluate(() => document.activeElement?.matches('.cal__nav button')),
+    'and the keyboard stays on the arrows rather than falling to the top of the page');
+  check(chipsSeen === model.recordsBySession.size, 'every record in the log was shown once', `${chipsSeen}/${model.recordsBySession.size}`);
+
+  const day = page.locator('[data-day]').first();
+  const id = await day.getAttribute('data-day');
+  await day.click();
+  await page.waitForTimeout(150);
+  check((await page.getAttribute(`[data-session="${id}"]`, 'aria-expanded')) === 'true', 'a trained day opens its workout');
+  check(await page.isVisible(`[data-session-row="${id}"] .session__detail`), 'and its sets are on screen');
+  await ctx.close();
+}
+
+console.log('\n— history: a day with two workouts rings for either one —');
+{
+  // An earlier, empty workout on the same day as one that set a record, so
+  // the day's first workout set none and its second did.
+  const model = buildModel(materialise(FEED), { cutoff: Infinity });
+  const recordId = [...model.recordsBySession.keys()].map((id) => model.sessions.find((x) => x.id === id))
+    .sort((a, b) => b.startedAt - a.startedAt)[0].id;
+  const base = FEED.find((r) => r.entity_table === 'workouts' && r.entity_id === recordId);
+  const earlier = base.payload.startedAt - 3600000;
+  const rows = FEED.concat([{ ...base, seq: 99998, entity_id: 'w-early',
+    payload: { ...base.payload, id: 'w-early', title: 'Mobility', startedAt: earlier, endedAt: earlier + 1200000 } }]);
+  const { page, ctx } = await open({ rows });
+  for (;;) {
+    if (await page.locator('[data-day="w-early"]').count()) break;
+    await page.click('.cal__nav [aria-label="Previous month"]');
+  }
+  const day = page.locator('[data-day="w-early"]');
+  check(/2 workouts/.test(await day.getAttribute('aria-label')), 'the day holds both workouts');
+  check(await day.evaluate((e) => e.classList.contains('day--rec')), 'and rings for the record the second one set');
+  await ctx.close();
+}
+
+console.log('\n— history: a workout dated ahead never makes a future day or month —');
+{
+  // Another device with a clock running fast logs a workout three days ahead.
+  const ahead = Date.now() + 3 * 86400000;
+  const rows = FEED.concat([{ ...FEED.find((r) => r.entity_table === 'workouts'), seq: 99999,
+    entity_id: 'w-ahead', payload: { ...FEED.find((r) => r.entity_table === 'workouts').payload, id: 'w-ahead', startedAt: ahead, endedAt: ahead + 3600000 } }]);
+  const { page, ctx } = await open({ rows });
+  const title = (await page.textContent('.cal__title')).trim();
+  const thisMonth = new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+  check(title === thisMonth, 'History opens on this month, not the one ahead', `${title} / ${thisMonth}`);
+  check((await page.locator('[data-day="w-ahead"]').count()) === 0, 'and the day ahead is not a button');
+  check(await page.locator('.cal__nav [aria-label="Next month"]').isDisabled(), 'and there is no month after this one');
+  await ctx.close();
+}
+
+console.log('\n— exercises: a muscle chip filters the library —');
+{
+  const { page, ctx } = await open();
+  await page.click('[data-tab="exercises"]');
+  await page.waitForSelector('.ex-group');
+  const all = await page.locator('.ex-group').count();
+  const muscle = page.locator('[data-ex-cat]').nth(1);
+  const name = (await muscle.textContent()).trim();
+  await muscle.click();
+  const groups = await page.locator('.ex-group > h3').allTextContents();
+  check(groups.length === 1 && groups[0].trim() === name, `choosing ${name} leaves only ${name}`, groups.join(','));
+  check((await page.getAttribute('[data-ex-cat]:nth-child(2)', 'aria-pressed')) === 'true', 'and the chip reads as chosen');
+  await page.click('[data-ex-cat=""]');
+  check((await page.locator('.ex-group').count()) === all, 'All brings the whole library back');
+  await ctx.close();
 }
 
 console.log('\n— a large feed, as the relay returns it —');
@@ -258,6 +382,8 @@ console.log('\n— a custom exercise can be deleted —');
   const notes = await page.locator('.ex-panel__note').allTextContents();
   check(notes.some((t) => t.includes('Deleting keeps')), 'and explains what deleting keeps');
   await page.click('[data-exercise-delete]');
+  // Every deletion asks first, through the one confirm.
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(500);
   const batch = posted.at(-1) || [];
   check(batch.some((e) => e.table === 'exercises' && e.deleted === true), 'deleting tombstones it');
@@ -326,11 +452,23 @@ console.log('\n— routines: create, add, reorder, save, delete —');
   check((await page.inputValue('[data-routine-name]')) === 'Upper body',
     'an unsaved name is not thrown away by a structural change');
 
-  // Sets and reps, then a reorder, then save.
+  // Plan a set on the first exercise. The plan opens under its row, and the
+  // set is written as soon as it is added, the way the app's builder adds one.
   const firstRow = page.locator('[data-routine-item]').first();
-  await firstRow.locator('[data-item-field="sets"]').fill('4');
-  await firstRow.locator('[data-item-field="reps"]').fill('6-8');
-  await page.locator('[data-routine-item]').nth(1).locator('[data-routine-move="up"]').click();
+  const opener = firstRow.locator('[data-routine-open]');
+  if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+  await firstRow.locator('[data-routine-set-add]').click();
+  await page.waitForTimeout(400);
+  const planned = (posted.at(-1) || []).find((e) => e.table === 'routine_sets');
+  check(!!planned, 'adding a set writes a planned set');
+  // The new set is the LAST row: an added set copies the one above it.
+  await firstRow.locator('[data-set-field="reps"]').last().fill('6');
+  await firstRow.locator('[data-set-field="weight"]').last().fill('55');
+
+  // Reorder from the keyboard: the handle is a real button, and the arrow keys
+  // move the block it belongs to.
+  await page.locator('[data-routine-block]').nth(1).locator('[data-routine-grip]').focus();
+  await page.keyboard.press('ArrowUp');
   await page.waitForTimeout(400);
   const reordered = (posted.at(-1) || []).filter((e) => e.table === 'routine_exercises');
   check(reordered.length === 2, 'a reorder rewrites both positions', `${reordered.length}`);
@@ -346,27 +484,27 @@ console.log('\n— routines: create, add, reorder, save, delete —');
   await page.waitForTimeout(500);
   const saved = posted.at(-1) || [];
   const rt = saved.find((e) => e.table === 'routines');
-  const items = saved.filter((e) => e.table === 'routine_exercises');
   check(rt?.payload?.name === 'Upper body A', 'saving writes the name', rt?.payload?.name);
   check((await page.locator('.routine-card__name').allTextContents()).some((t) => t.includes('Upper body A')),
     'and the card shows it');
-  // The targets were carried by the reorder, so assert they ROUND TRIPPED:
-  // pushed at some point, and read back out of the rebuilt feed onto the row.
-  const everyPush = posted.flat().filter((e) => e.table === 'routine_exercises');
-  const withTargets = everyPush.find((e) => e.payload.targetSets === 4);
-  check(!!withTargets, 'the sets cell was pushed',
-    JSON.stringify(everyPush.map((i) => i.payload.targetSets)));
-  check(withTargets?.payload?.targetRepsMin === 6 && withTargets?.payload?.targetRepsMax === 8,
-    '"6-8" became a min and a max',
-    JSON.stringify([withTargets?.payload?.targetRepsMin, withTargets?.payload?.targetRepsMax]));
+  // The typed targets ROUND TRIP: pushed at some point, and read back out of the
+  // rebuilt feed onto the row.
+  const everySet = posted.flat().filter((e) => e.table === 'routine_sets');
+  // The last write of the set this test planned, not of a set the sample feed
+  // already held (opening a routine converts those, and that writes them too).
+  const withTargets = everySet.filter((e) => e.id === planned?.id).at(-1);
+  check(withTargets?.payload?.targetRepsMin === 6, 'the reps target was pushed', JSON.stringify(withTargets?.payload));
+  check(withTargets?.payload?.targetRepsMax === 6, 'as one number, min equal to max, as the app writes it');
+  check(withTargets?.payload?.targetWeightMilli === 55000, 'with the weight in milli', String(withTargets?.payload?.targetWeightMilli));
 
   const benchRow = page.locator('[data-routine-item]', { hasText: 'Bench press' });
-  check((await benchRow.locator('[data-item-field="sets"]').inputValue()) === '4',
-    'and the sets cell reads back from the feed');
-  check((await benchRow.locator('[data-item-field="reps"]').inputValue()) === '6-8',
-    'as does the rep range');
+  check((await benchRow.locator('[data-set-field="reps"]').last().inputValue()) === '6',
+    'and the reps read back from the feed');
+  check((await benchRow.locator('[data-set-field="weight"]').last().inputValue()) === '55',
+    'as does the weight');
 
   await page.locator('[data-routine-item]').first().locator('[data-routine-remove]').click();
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(400);
   const removed = (posted.at(-1) || []).filter((e) => e.table === 'routine_exercises');
   check(removed.some((e) => e.deleted === true), 'removing a row tombstones it');
@@ -374,6 +512,7 @@ console.log('\n— routines: create, add, reorder, save, delete —');
     'and the rest close up behind it');
 
   await page.click('[data-routine-delete]');
+  await page.click('[data-confirm-go]');
   await page.waitForTimeout(500);
   const gone = posted.at(-1) || [];
   check(gone.some((e) => e.table === 'routines' && e.deleted === true), 'deleting tombstones the routine');

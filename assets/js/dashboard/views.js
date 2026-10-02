@@ -5,21 +5,26 @@
 import { icon, tile } from '../icons.js';
 import {
   makeRenderer,
+  isRecord,
+  recordAsOfItsDate,
   countsAsWorking,
   countsInTotals,
   setVolumeMilli,
   estimatedOneRepMaxMilli,
   estimateText,
-  volumeText,
   relativeStrength,
   relativeStrengthText,
   repsText,
   durationText,
   shortDate,
-  longDate,
   fullDate,
   dateTime,
   weekLabel,
+  weekStart,
+  monthKeyOf,
+  monthTitle,
+  monthShort,
+  dayName,
   equipmentLabel,
   fromMilli,
   EQUIPMENT_TYPES,
@@ -73,72 +78,143 @@ export function confirmDialog() {
 
 /* ================================================================== HISTORY */
 
+/**
+ * History, the way the app draws it (UX-33): the month at the top as a calendar
+ * with its totals, then that month's workouts, newest first.
+ *
+ * The calendar is a record of what happened, never a plan. A trained day is an
+ * ink disc, not accent (a month of mint discs is the repetition that breaks
+ * tint-scarcity); a day with a record adds a gold ring and says so in its label.
+ * The arrows page between months you trained in, so there is never a blank
+ * month to fall behind on. Paging has no motion: the heading changing is the
+ * confirmation.
+ */
+export function historyMonths(model, now = Date.now()) {
+  // Past-only: a row dated ahead (a skewed clock on another device) never makes
+  // a month after this one, as in the app.
+  const current = monthKeyOf(now);
+  const months = [];
+  for (const s of model.sessions) {
+    const key = monthKeyOf(s.startedAt);
+    if (key <= current && months[months.length - 1] !== key) months.push(key);
+  }
+  return months;
+}
+
 export function renderHistory(model, state) {
   const render = makeRenderer(model.displayUnit);
+  const total = model.totals.workouts;
+  const meta = `<span class="tab-head__meta">${total.toLocaleString('en-US')} ${total === 1 ? 'workout' : 'workouts'} in your log</span>`;
+  const months = historyMonths(model);
 
-  if (model.sessions.length === 0) {
+  if (months.length === 0) {
     return `
-      <div class="tab-head"><h2>Workout history with Jotlift</h2></div>
       <p class="ex-empty">No workouts here yet. Log one on your phone and it shows up here.</p>`;
   }
 
-  const hours = (model.totals.ms / 3_600_000).toFixed(1);
+  const month = months.includes(state.historyMonth) ? state.historyMonth : months[0];
+  const index = months.indexOf(month);
+  const sessions = model.sessions.filter((s) => monthKeyOf(s.startedAt) === month);
+
   // Session volume is summed in each exercise's own unit; reconcile it into the
   // unit on screen once, through the one renderer.
-  const volume = model.sessions.reduce(
-    (sum, s) => sum + render.value(s.volumeMilli, s.volumeUnit),
-    0,
-  );
+  const sets = sessions.reduce((sum, s) => sum + s.setCount, 0);
+  const exercises = new Set(sessions.flatMap((s) => s.entries.map((e) => e.exercise.id))).size;
+  const records = sessions.reduce((sum, s) => sum + (model.recordsBySession.get(s.id) || 0), 0);
+  const ms = sessions.reduce((sum, s) => sum + s.durationMs, 0);
 
-  const weeks = model.weeks
-    .map((week) => {
-      const sessions = week.sessions
-        .map((session) => renderSession(session, model, state, render))
-        .join('');
-      return `
+  const weeks = [];
+  for (const session of sessions) {
+    const start = weekStart(session.startedAt);
+    const last = weeks[weeks.length - 1];
+    if (last && last.start === start) last.sessions.push(session);
+    else weeks.push({ start, sessions: [session] });
+  }
+
+  const list = weeks
+    .map(
+      (week) => `
         <section class="week">
           <h3>${esc(weekLabel(week.start, Date.now()))}</h3>
-          <div class="week__list">${sessions}</div>
-        </section>`;
-    })
+          <div class="week__list">${week.sessions.map((session) => renderSession(session, model, state, render)).join('')}</div>
+        </section>`,
+    )
     .join('');
 
   return `
-    <div class="tab-head">
-      <h2>Workout history with Jotlift</h2>
-      <span class="tab-head__meta">${model.totals.workouts.toLocaleString('en-US')} ${model.totals.workouts === 1 ? 'workout' : 'workouts'}, newest first</span>
-    </div>
+    <div class="tab-head">${meta}</div>
+    <div class="hist">
+      <div class="hist__side">
+        ${renderCalendar(model, month, sessions, months[index + 1] ?? null, months[index - 1] ?? null)}
+        <div class="card stats" role="group" aria-label="${esc(monthTitle(month))} totals">
+          <div class="stat"><span class="stat__value">${sets.toLocaleString('en-US')}</span><span class="stat__label">${sets === 1 ? 'Set' : 'Sets'}</span></div>
+          <div class="stat"><span class="stat__value">${esc(durationText(ms))}</span><span class="stat__label">Time</span></div>
+          <div class="stat"><span class="stat__value">${exercises.toLocaleString('en-US')}</span><span class="stat__label">${exercises === 1 ? 'Exercise' : 'Exercises'}</span></div>
+          <div class="stat"><span class="stat__value">${records.toLocaleString('en-US')}</span><span class="stat__label">${records === 1 ? 'Record' : 'Records'}</span></div>
+        </div>
+      </div>
+      <div class="hist__list">${list}</div>
+    </div>`;
+}
 
-    <div class="summary-strip">
-      <div class="summary-tile">
-        <p class="summary-tile__value">${model.totals.workouts.toLocaleString('en-US')}</p>
-        <p class="summary-tile__label">Workouts</p>
-      </div>
-      <div class="summary-tile">
-        <p class="summary-tile__value">${hours}</p>
-        <p class="summary-tile__label">Hrs</p>
-      </div>
-      <div class="summary-tile">
-        <p class="summary-tile__value">${model.totals.sets.toLocaleString('en-US')}</p>
-        <p class="summary-tile__label">Sets</p>
-      </div>
-      <div class="summary-tile">
-        <p class="summary-tile__value">${Math.round(volume).toLocaleString('en-US')}</p>
-        <p class="summary-tile__label">Volume, ${esc(model.displayUnit)}</p>
-      </div>
-    </div>
+function renderCalendar(model, month, sessions, previous, next) {
+  const render = makeRenderer(model.displayUnit);
+  const [y, m] = month.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const lead = (first.getDay() + 6) % 7; // Monday first
+  const days = new Date(y, m, 0).getDate();
+  const now = new Date();
+  const today = now.getFullYear() === y && now.getMonth() === m - 1 ? now.getDate() : null;
 
-    ${weeks}`;
+  // Oldest first, so a day opens on the workout that came first that day.
+  const byDay = new Map();
+  for (const s of [...sessions].reverse()) {
+    const d = new Date(s.startedAt).getDate();
+    if (!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(s);
+  }
+
+  const volume = sessions.reduce((sum, s) => sum + render.value(s.volumeMilli, s.volumeUnit), 0);
+  const cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<span class="cal__dow" aria-hidden="true">${d}</span>`);
+  for (let i = 0; i < lead; i++) cells.push('<span aria-hidden="true"></span>');
+  for (let d = 1; d <= days; d++) {
+    // Only a trained day is a button, and a day after today never is.
+    const workouts = new Date(y, m - 1, d).getTime() <= now.getTime() ? byDay.get(d) : null;
+    if (!workouts) {
+      cells.push(`<span class="day${d === today ? ' day--today' : ''}" aria-hidden="true">${d}</span>`);
+      continue;
+    }
+    const records = workouts.reduce((sum, w) => sum + (model.recordsBySession.get(w.id) || 0), 0);
+    const label = [
+      dayName(workouts[0].startedAt),
+      `${workouts.length} ${workouts.length === 1 ? 'workout' : 'workouts'}`,
+      ...(records > 0 ? [`${records} ${records === 1 ? 'record' : 'records'}`] : []),
+    ].join(', ');
+    cells.push(
+      `<button class="day day--on${records > 0 ? ' day--rec' : ''}" type="button" data-day="${esc(workouts[0].id)}" aria-label="${esc(label)}">${d}</button>`,
+    );
+  }
+
+  return `
+    <div class="card cal">
+      <div class="cal__head">
+        <div>
+          <h2 class="cal__title">${esc(monthTitle(month))}</h2>
+          <p class="cal__totals"><span>${sessions.length} ${sessions.length === 1 ? 'workout' : 'workouts'}</span><span>${Math.round(volume).toLocaleString('en-US')} ${esc(render.unit)} volume</span></p>
+        </div>
+        <div class="cal__nav">
+          <button type="button" data-month="${esc(previous ?? '')}" aria-label="Previous month"${previous ? '' : ' disabled'}>${icon('chevronL', 20, 2.2)}</button>
+          <button type="button" data-month="${esc(next ?? '')}" aria-label="Next month"${next ? '' : ' disabled'}>${icon('chevronR', 20, 2.2)}</button>
+        </div>
+      </div>
+      <div class="cal__grid">${cells.join('')}</div>
+    </div>`;
 }
 
 function renderSession(session, model, state, render) {
   const open = state.openSession === session.id;
-  const summary = [
-    longDate(session.startedAt),
-    durationText(session.durationMs),
-    `${session.setCount} ${session.setCount === 1 ? 'set' : 'sets'}`,
-    volumeText(session.volumeMilli, session.volumeUnit, render),
-  ].join(' · ');
+  const exercises = new Set(session.entries.map((e) => e.exercise.id)).size;
+  const records = model.recordsBySession.get(session.id) || 0;
 
   const detail = open
     ? `<div class="session__detail">${session.entries
@@ -147,20 +223,38 @@ function renderSession(session, model, state, render) {
     : '';
 
   return `
-    <div class="session">
-      <button class="session__toggle" type="button" data-session="${esc(session.id)}" aria-expanded="${open}">
-        ${tile('dumbbell', 44)}
-        <span class="session__main">
-          <span class="session__title">
-            <span class="session__name">${esc(session.title)}</span>
-            <span class="session__synced" title="Synced" role="img" aria-label="Synced">${icon('cloud', 15, 2)}</span>
-          </span>
-          <span class="session__summary">${esc(summary)}</span>
+    <div class="session" data-session-row="${esc(session.id)}">
+      <button class="session__toggle" type="button" data-session="${esc(session.id)}" aria-expanded="${open}"
+              aria-label="${esc(rowLabel(session, exercises, records, render))}">
+        <span class="session__date" aria-hidden="true">
+          <span class="session__day">${new Date(session.startedAt).getDate()}</span>
+          <span class="session__month">${esc(monthShort(session.startedAt))}</span>
         </span>
-        <span class="session__caret">${icon(open ? 'chevronD' : 'chevronR', 18)}</span>
+        <span class="session__main">
+          <span class="session__name">${esc(session.title)}</span>
+          <span class="session__meta">
+            <span>${exercises} ${exercises === 1 ? 'exercise' : 'exercises'}</span>
+            <span>${esc(durationText(session.durationMs))}</span>
+            ${records > 0 ? `<span class="pill pill--record">${records} ${records === 1 ? 'record' : 'records'}</span>` : ''}
+          </span>
+        </span>
+        <span class="session__volume">${Math.round(render.value(session.volumeMilli, session.volumeUnit)).toLocaleString('en-US')}<span class="session__unit">${esc(render.unit)}</span></span>
+        <span class="session__caret">${icon('chevronR', 16, 2.2)}</span>
       </button>
       ${detail}
     </div>`;
+}
+
+/** The row's spoken label, the app's SessionRow order: date, name, then facts. */
+function rowLabel(session, exercises, records, render) {
+  return [
+    dayName(session.startedAt),
+    session.title,
+    `${exercises} ${exercises === 1 ? 'exercise' : 'exercises'}`,
+    durationText(session.durationMs),
+    ...(records > 0 ? [`${records} ${records === 1 ? 'record' : 'records'}`] : []),
+    `${Math.round(render.value(session.volumeMilli, session.volumeUnit)).toLocaleString('en-US')} ${render.unit} volume`,
+  ].join(', ');
 }
 
 function renderSessionExercise(entry, model, render) {
@@ -168,9 +262,11 @@ function renderSessionExercise(entry, model, render) {
   const unit = exercise.unit || 'kg';
   const floorMilli = model.floorByExercise.get(exercise.id);
   const repOnly = model.isRepOnly(exercise);
+  // The set that carried a weight record says so in gold, as a word (SetLine.tsx).
+  const recordWord = exercise.bodyweightSubtype === 'assisted' ? 'Least assistance' : 'Heaviest';
 
   const floor = floorMilli != null
-    ? `<span class="pill pill--success">${icon('check', 13, 2.4)}Floor ${esc(render.text(floorMilli, unit))}</span>`
+    ? `<span class="pill pill--success">${icon('lock', 11, 2.4)}Floor ${esc(render.text(floorMilli, unit))}</span>`
     : '';
 
   // Per-side rows share one ordinal (D13). They are shown on one line rather
@@ -178,7 +274,6 @@ function renderSessionExercise(entry, model, render) {
   const byOrdinal = new Map();
   let perSide = false;
   for (const set of entry.sets) {
-    if (!countsInTotals(set.setType)) continue;
     if (set.side !== 'both') perSide = true;
     const held = byOrdinal.get(set.orderIndex) || [];
     held.push(set);
@@ -193,13 +288,16 @@ function renderSessionExercise(entry, model, render) {
           const value =
             repOnly || set.weightMilli == null
               ? `${set.reps} reps`
-              : `${render.text(set.weightMilli, unit)} × ${set.reps}`;
+              : `${esc(render.text(set.weightMilli, unit))} <span class="x">&times;</span> ${set.reps}`;
           if (set.side === 'left') return `${value} L`;
           if (set.side === 'right') return `${value} R`;
           return value;
         })
-        .join(' · ');
-      return `<span class="session__set-n">${index + 1}</span><span class="session__set-v">${esc(text)}</span>`;
+        .join(', ');
+      const type = sides[0].setType;
+      const record = sides.some((set) => model.recordSetIds.has(set.id));
+      const tag = record ? recordWord : type && type !== 'working' ? SET_TYPE_LABELS[type] || '' : '';
+      return `<span class="session__set-n">${index + 1}</span><span class="session__set-v">${text}</span><span class="session__set-t${record ? ' session__set-t--record' : ''}">${esc(tag)}</span>`;
     })
     .join('');
 
@@ -235,6 +333,7 @@ export function metricsFor(exercise, isRepOnly) {
 
 /** One point per session that has at least one working set. */
 export function buildSeries(history, exercise) {
+  const assisted = exercise.bodyweightSubtype === 'assisted';
   const ctx = {
     equipmentType: exercise.equipmentType,
     bodyweightSubtype: exercise.bodyweightSubtype ?? null,
@@ -262,7 +361,10 @@ export function buildSeries(history, exercise) {
       }
     }
 
-    points.push({ startedAt: session.startedAt, topSetWeightMilli, volumeMilli, reps });
+    // Gold when this workout set a record as of its own date: the same question
+    // History's chip asks, through the one derivation.
+    const isRecordPoint = isRecord(recordAsOfItsDate(history, session, assisted));
+    points.push({ startedAt: session.startedAt, topSetWeightMilli, volumeMilli, reps, isRecord: isRecordPoint });
   }
   return points;
 }
@@ -275,7 +377,6 @@ export function renderProgress(model, state) {
 
   if (exercises.length === 0) {
     return `
-      <div class="tab-head"><h2>Progress</h2></div>
       <p class="ex-empty">Nothing to chart yet. Log an exercise a few times and its line appears here.</p>`;
   }
 
@@ -321,7 +422,7 @@ export function renderProgress(model, state) {
   const bests = renderBests(history, exercise, model, render);
 
   const readOnlyNote = state.entitlement === 'lapsed' && state.cutoff
-    ? `<p class="bests-note">The line ends ${esc(fullDate(state.cutoff))}, where your subscription did. Sessions you have logged since are on your phone and are not read here.</p>`
+    ? `<p class="bests-note">The line ends ${esc(fullDate(state.cutoff))}, where your subscription did. Workouts you have logged since are on your phone and are not read here.</p>`
     : '';
 
   const bodyweightNote = model.bodyweight
@@ -330,11 +431,9 @@ export function renderProgress(model, state) {
 
   return `
     <div class="tab-head">
-      <h2>Progress</h2>
-      <span class="tab-head__meta">${series.length} ${series.length === 1 ? 'session' : 'sessions'} logged</span>
+      ${picker}
+      <span class="tab-head__meta">${series.length} ${series.length === 1 ? 'workout' : 'workouts'} logged</span>
     </div>
-
-    ${picker}
 
     <div class="chart-card">
       <div class="segmented" role="tablist" aria-label="Metric">
@@ -348,7 +447,7 @@ export function renderProgress(model, state) {
       ${renderChart(series, metric, unit, render, state, exercise, repOnly)}
     </div>
 
-    <h3 style="margin:0 0 12px;font-size:17px;font-weight:600;color:var(--color-text)">Bests</h3>
+    <h3 class="eyebrow" style="padding-left:4px">Bests</h3>
     ${bests}
     <p class="bests-note">Estimated 1RM is worked out from the sets you logged, with the Epley formula. It is an estimate, not a lift you performed.${bodyweightNote}</p>
     ${readOnlyNote}`;
@@ -374,7 +473,7 @@ function metricText(value, metric, render) {
 
 function renderChart(series, metric, unit, render, state, exercise, repOnly) {
   if (series.length < 2) {
-    return `<p class="chart-readout" style="margin-top:16px">Two sessions and a line appears. Keep logging ${esc(exercise.name)} and it fills in.</p>`;
+    return `<p class="chart-readout" style="margin-top:16px">Two workouts and a line appears. Keep logging ${esc(exercise.name)} and it fills in.</p>`;
   }
 
   const ys = series.map((p) => metricValue(p, metric, unit, render));
@@ -443,7 +542,8 @@ function renderChart(series, metric, unit, render, state, exercise, repOnly) {
             pickedIndex == null ? '0' : py(ys[pickedIndex]).toFixed(1) + 'px'
           }"></span>`;
 
-  const readoutFor = (i) => `${metricText(ys[i], metric, render)} on ${shortDate(series[i].startedAt)}`;
+  const readoutFor = (i) =>
+    `${metricText(ys[i], metric, render)} on ${shortDate(series[i].startedAt)}${series[i].isRecord ? ', a record' : ''}`;
   const readout = pickedIndex != null ? readoutFor(pickedIndex) : '';
 
   const hits = series
@@ -456,9 +556,16 @@ function renderChart(series, metric, unit, render, state, exercise, repOnly) {
     )
     .join('');
 
+  const points = series
+    .map(
+      (p, i) =>
+        `<span class="chart-point${p.isRecord ? ' chart-point--record' : ''}" style="left:${pctX(p.startedAt)};top:${py(ys[i]).toFixed(1)}px"></span>`,
+    )
+    .join('');
+
   const label =
     `${metric === 'topSet' ? 'Top set' : metric === 'reps' ? 'Reps' : 'Volume'} for ${exercise.name},` +
-    ` ${series.length} sessions from ${shortDate(x0)} to ${shortDate(x1)}`;
+    ` ${series.length} workouts from ${shortDate(x0)} to ${shortDate(x1)}`;
 
   return `
     <p class="chart-readout" data-chart-readout>${esc(readout)}</p>
@@ -467,8 +574,10 @@ function renderChart(series, metric, unit, render, state, exercise, repOnly) {
         <div class="chart-plot" style="width:max(100%, ${plotPx}px)">
           <svg width="100%" height="${PLOT_HEIGHT}" viewBox="0 0 640 ${PLOT_HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">
             <line x1="0" y1="175.5" x2="640" y2="175.5" stroke="var(--color-hairline)" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+            <polygon points="${vx(x0).toFixed(1)},175.5 ${line} ${vx(x1).toFixed(1)},175.5" fill="var(--color-accent)" fill-opacity="0.12" stroke="none"></polygon>
             <polyline points="${line}" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
           </svg>
+          ${points}
           ${guide}
           <span class="chart-dot chart-dot--last" style="left:${pctX(x1)};top:${py(ys[lastIndex]).toFixed(1)}px"></span>
           <span class="chart-lastlabel" style="left:${pctX(x1)};top:${py(ys[lastIndex]).toFixed(1)}px;transform:${lastShift}">${esc(metricText(ys[lastIndex], metric, render))}</span>
@@ -477,7 +586,8 @@ function renderChart(series, metric, unit, render, state, exercise, repOnly) {
         </div>
       </div>
       ${yTicks}
-    </div>`;
+    </div>
+    ${series.some((p) => p.isRecord) ? '<p class="chart-key">Gold marks a workout that set a record.</p>' : ''}`;
 }
 
 /**
@@ -551,7 +661,20 @@ export function renderExercises(model, state) {
   const render = makeRenderer(model.displayUnit);
   const query = (state.exerciseQuery || '').trim().toLowerCase();
 
+  // The muscle chips filter the library the way the app's do: one at a time,
+  // with All as the way back. A chip for a muscle the library no longer has
+  // simply falls back to All.
+  const category = model.library.some((g) => g.label === state.exerciseCategory) ? state.exerciseCategory : null;
+  const check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const chips = [['', 'All'], ...model.library.map((g) => [g.label, g.label])]
+    .map(
+      ([value, label]) =>
+        `<button class="chip" type="button" data-ex-cat="${esc(value)}" aria-pressed="${(value || null) === category}">${check}${esc(label)}</button>`,
+    )
+    .join('');
+
   const groups = model.library
+    .filter((g) => category == null || g.label === category)
     .map((g) => ({
       label: g.label,
       items: query ? g.items.filter((e) => e.name.toLowerCase().includes(query)) : g.items,
@@ -595,19 +718,16 @@ export function renderExercises(model, state) {
       : '';
 
   return `
-    <div class="tab-head" style="margin-bottom:14px">
-      <h2>Exercises</h2>
-      ${editable ? '<button class="btn btn--sm" type="button" data-add-exercise>Add exercise</button>' : ''}
-    </div>
-
-    <div style="max-width:340px;margin-bottom:20px">
-      <label class="field">
-        <span class="sr-only">Search exercises</span>
-        <span class="field__box">
+    <div class="ex-tools">
+      <div class="tab-head" style="margin:0">
+        <label class="search" style="flex:1;min-width:220px">
+          ${icon('search', 18, 2)}
+          <span class="sr-only">Search exercises</span>
           <input type="search" placeholder="Search exercises" data-exercise-query value="${esc(state.exerciseQuery || '')}">
-          ${icon('search', 18)}
-        </span>
-      </label>
+        </label>
+        ${editable ? '<button class="btn btn--sm" type="button" data-add-exercise>Add exercise</button>' : ''}
+      </div>
+      <div class="chips" role="group" aria-label="Muscle">${chips}</div>
     </div>
 
     ${creating}
@@ -621,17 +741,16 @@ function renderExerciseRow(exercise, index, openId, model, render) {
   const best = bestLine(exercise, model, render);
   const lastDone = model.lastDoneByExercise.get(exercise.id);
 
+  const sub = [exercise.isBuiltin ? null : 'Your own', lastDone ? null : 'Not logged yet'].filter(Boolean);
   return `
-    <button class="ex-row" type="button" data-exercise="${esc(exercise.id)}" aria-expanded="${isOpen}" aria-selected="${isOpen}">
-      ${index > 0 ? '<span class="divider-60"></span>' : ''}
-      ${tile('dumbbell', 32)}
+    <button class="ex-row" type="button" data-exercise="${esc(exercise.id)}" aria-expanded="${isOpen}">
       <span class="ex-row__main">
         <span class="ex-row__name">${esc(exercise.name)}</span>
-        ${exercise.isBuiltin ? '' : '<span class="ex-row__own">Your own</span>'}
+        ${sub.length ? `<span class="ex-row__own">${sub.map(esc).join('<span aria-hidden="true">&ensp;</span>')}</span>` : ''}
       </span>
       <span class="ex-row__best">${esc(best)}</span>
       <span class="ex-row__last">${lastDone ? esc(shortDate(lastDone)) : ''}</span>
-      <span class="ex-row__chevron">${icon(isOpen ? 'chevronD' : 'chevronR', 18)}</span>
+      <span class="ex-row__chevron">${icon('chevronR', 16, 2.2)}</span>
     </button>`;
 }
 
@@ -695,7 +814,7 @@ function renderExerciseDetail(exercise, model, state, render, editable) {
           <div><p>Unit</p><p>${esc(exercise.unit || 'kg')}</p></div>
           <div><p>Logged in</p><p>${repOnly ? 'Reps' : 'Weight and reps'}</p></div>
         </div>
-        <p style="margin:0;font-size:15px;line-height:1.55" class="quiet">${
+        <p class="ex-panel__note" style="margin:0">${
           state.entitlement === 'lapsed'
             ? 'Editing is paused while your subscription is lapsed. Your exercises and their history are all still here.'
             : 'Subscribe to edit your exercises here.'
@@ -758,7 +877,7 @@ function renderExerciseDetail(exercise, model, state, render, editable) {
 function renderExerciseCreate(model, state) {
   return `
     <div class="ex-panel ex-panel--create" data-exercise-create>
-      <h3 style="margin:0 0 16px;font-size:17px;font-weight:600;color:var(--color-text)">New exercise</h3>
+      <h3 class="tab-title" style="margin-bottom:16px">New exercise</h3>
       <div class="ex-form">
         <label class="field">
           <span class="field__label">Name</span>
@@ -795,11 +914,10 @@ export function renderRoutines(model, state) {
     'A routine is a named list of exercises in the order you want them. There are no days and nothing is scheduled. Build one here, then start it from your phone whenever you want it.';
 
   const head = `
-    <div class="tab-head" style="margin-bottom:6px">
-      <h2>Routines</h2>
+    <div class="tab-head" style="align-items:flex-start">
+      <p class="tab-intro" style="margin:0;flex:1;min-width:240px">${intro}</p>
       ${editable ? '<button class="btn btn--sm" type="button" data-routine-new>New routine</button>' : ''}
-    </div>
-    <p style="margin:0 0 16px;font-size:15px;max-width:60ch" class="quiet">${intro}</p>`;
+    </div>`;
 
   if (model.routines.length === 0) {
     return `${head}
@@ -827,7 +945,7 @@ function routineCards(model, selected) {
     .map(
       (r) => `
       <button class="routine-card" type="button" data-routine="${esc(r.id)}" aria-selected="${r.id === selected.id}">
-        <span style="display:flex;flex-direction:column;gap:2px">
+        <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
           <span class="routine-card__name">${esc(r.name)}</span>
           <span class="routine-card__detail">${r.items.length} ${r.items.length === 1 ? 'exercise' : 'exercises'}</span>
         </span>
@@ -891,7 +1009,7 @@ function renderRoutineDetail(routine, model, state, editable) {
       <span></span><span></span><span></span>
     </div>`;
 
-  const counts = `${routine.items.length} ${routine.items.length === 1 ? 'exercise' : 'exercises'} · ${routine.plannedSetCount} ${routine.plannedSetCount === 1 ? 'set' : 'sets'}`;
+  const counts = `<span>${routine.items.length} ${routine.items.length === 1 ? 'exercise' : 'exercises'}</span><span>${routine.plannedSetCount} ${routine.plannedSetCount === 1 ? 'set' : 'sets'}</span>`;
 
   return `
     <div class="routine-detail" data-routine-detail="${esc(routine.id)}">
@@ -905,9 +1023,9 @@ function renderRoutineDetail(routine, model, state, editable) {
                  </label>`
               : `<h3>${esc(routine.name)}</h3>`
           }
-          <p class="routine-detail__counts">${esc(counts)}</p>
+          <p class="routine-detail__counts">${counts}</p>
         </div>
-        ${editable ? '<span style="font-size:14px" class="decorative">Drag the handle to reorder</span>' : '<span style="font-size:14px" class="decorative">Start it on your phone</span>'}
+        <span class="routine-detail__hint">${editable ? 'Drag the handle to reorder' : 'Start it on your phone'}</span>
       </div>
 
       <div class="routine-table">
@@ -917,7 +1035,7 @@ function renderRoutineDetail(routine, model, state, editable) {
         <div data-routine-rows>${rows || empty}</div>
       </div>
 
-      <p style="margin:14px 0 0;font-size:14px;max-width:64ch" class="quiet">Open an exercise to plan its sets. Every target is optional: a set with none runs on what you lift.</p>
+      <p class="routine-plan__note" style="margin-top:14px">Open an exercise to plan its sets. Every target is optional: a set with none runs on what you lift.</p>
 
       ${
         editable
@@ -938,7 +1056,7 @@ function renderRoutineDetail(routine, model, state, editable) {
       }
       ${
         state.entitlement === 'lapsed'
-          ? '<p style="margin:18px 0 0;font-size:15px" class="quiet">Routines are read only while your subscription is lapsed. Nothing has been deleted, and they work again as soon as you resubscribe.</p>'
+          ? '<p class="routine-plan__note" style="margin-top:18px">Routines are read only while your subscription is lapsed. Nothing has been deleted, and they work again as soon as you resubscribe.</p>'
           : ''
       }
     </div>`;
@@ -1184,8 +1302,8 @@ function renderSupersetPicker(routine, state) {
   const count = chosen.size;
   return `
     <div class="routine-detail">
-      <h3 style="margin:0 0 4px;font-size:20px;font-weight:600;color:var(--color-text)">Pick exercises to group</h3>
-      <p style="margin:0 0 18px;font-size:15px;max-width:60ch" class="quiet">A superset runs its exercises back to back. They move together and stay together, and the grouping carries into the workout you start from this routine.</p>
+      <h3 class="tab-title">Pick exercises to group</h3>
+      <p class="tab-intro" style="margin:0 0 18px">A superset runs its exercises back to back. They move together and stay together, and the grouping carries into the workout you start from this routine.</p>
       <div class="pick-list">${rows}</div>
       <div class="ex-actions" style="margin-top:18px">
         <div class="ex-actions__left">
@@ -1224,8 +1342,8 @@ export function renderExport(model, state) {
   const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
 
   return `
-    <h2 style="margin:0 0 6px;font-size:20px;font-weight:600;color:var(--color-text)">Export to a spreadsheet</h2>
-    <p style="margin:0 0 20px;max-width:56ch" class="quiet">One row per set, with the date, exercise, weight and reps. Each row keeps the unit you logged it in, and left and right stay in separate columns. Export never depends on a subscription: it works the same whether yours is active, lapsed or gone.</p>
+    <h2 class="tab-title">Export to a spreadsheet</h2>
+    <p class="tab-intro" style="margin:0 0 20px">One row per set, with the date, exercise, weight and reps. Each row keeps the unit you logged it in, and left and right stay in separate columns. Export never depends on a subscription: it works the same whether yours is active, lapsed or gone.</p>
 
     <div class="export-card">
       <div class="export-dates">
@@ -1239,7 +1357,7 @@ export function renderExport(model, state) {
         </label>
       </div>
       <p class="export-label">File</p>
-      <div class="export-formats" role="group" aria-label="File format">
+      <div class="segmented export-formats" role="group" aria-label="File format">
         <button type="button" data-format="csv" aria-pressed="${(state.exportFormat || 'csv') === 'csv'}">CSV</button>
         <button type="button" data-format="xlsx" aria-pressed="${state.exportFormat === 'xlsx'}">Excel</button>
       </div>
@@ -1265,16 +1383,13 @@ export function renderAccount(model, state) {
   const subscription =
     state.entitlement === 'active'
       ? `
-        <p style="margin:0 0 6px;font-size:16px;color:var(--color-text)">${esc(planLine(state))}</p>
-        ${state.expiresAt ? `<p style="margin:0 0 14px;font-size:15px" class="quiet">Renews ${esc(fullDate(new Date(state.expiresAt).getTime()))}.</p>` : ''}
-        <p style="margin:0;font-size:15px" class="quiet">Billed by your app store. Manage or cancel it there, not here.</p>`
+        ${state.expiresAt ? `<p>Renews ${esc(fullDate(new Date(state.expiresAt).getTime()))}.</p>` : ''}
+        <p>Billed by your app store. Manage or cancel it there, not here.</p>`
       : `
-        <p style="margin:0 0 6px;font-size:16px;color:var(--color-text)">Jotlift Pro ended ${esc(state.cutoff ? fullDate(state.cutoff) : 'when your last period ran out')}.</p>
-        <p style="margin:0 0 16px;font-size:15px" class="quiet">Your log is still here up to that date and you can still export it. Sync stopped then, so newer workouts stay on your phone. To edit again, and to bring them across, resubscribe in the app.</p>`;
+        <p>Your log is still here up to that date and you can still export it. Sync stopped then, so newer workouts stay on your phone. To edit again, and to bring them across, resubscribe in the app.</p>`;
 
   return `
-    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:var(--color-text)">Account</h2>
-
+    <h2 class="eyebrow" style="padding-left:4px">Signed in</h2>
     <div class="account-list">
       <div class="account-row">
         <span class="account-row__key">Email</span>
@@ -1288,11 +1403,17 @@ export function renderAccount(model, state) {
         <span class="account-row__key">Last backup</span>
         <span class="account-row__val account-row__val--num">${lastBackup ? esc(dateTime(lastBackup)) : 'Nothing backed up yet'}</span>
       </div>
+    </div>
+
+    <h2 class="eyebrow" style="padding-left:4px;margin-top:28px">Logging</h2>
+    <div class="account-list">
       <div class="account-row account-row--control">
         <span class="account-row__key">Weight step</span>
         <span class="stepper">
           <button type="button" data-step="down" aria-label="Decrease"${readOnly || step <= 0.5 ? ' disabled' : ''}>−</button>
-          <span class="stepper__value" data-step-value>${step}</span>
+          <span class="stepper__value" data-step-value>${
+            state.stepRoll ? `<span class="roll${state.stepRoll === 'down' ? ' roll--down' : ''}">${step}</span>` : step
+          }</span>
           <button type="button" data-step="up" aria-label="Increase"${readOnly || step >= 999 ? ' disabled' : ''}>+</button>
         </span>
       </div>
@@ -1300,23 +1421,24 @@ export function renderAccount(model, state) {
     <p class="account-note">Every + and - on every weight field moves by this, and it is the same number in kg and in lb. It syncs, so each of your devices steps the same way. Changing it never rewrites a weight you already logged.</p>
     <p class="notice notice--success" data-step-saved hidden></p>
 
+    <h2 class="eyebrow" style="padding-left:4px">Subscription</h2>
     <div class="account-card">
       <div class="account-card__head">
-        <h3>Subscription</h3>
+        <h3>${esc(state.entitlement === 'active' ? planLine(state) : `Jotlift Pro ended ${state.cutoff ? fullDate(state.cutoff) : 'when your last period ran out'}.`)}</h3>
         ${
           state.entitlement === 'active'
             ? `<span class="pill pill--success">${icon('check', 12, 2.4)}Active</span>`
-            : `<span class="pill pill--warning">${icon('alert', 12, 2)}Lapsed</span>`
+            : `<span class="pill">${icon('alert', 12, 2)}Lapsed</span>`
         }
       </div>
       ${subscription}
     </div>
 
+    <h2 class="eyebrow" style="padding-left:4px">Your data</h2>
     <div class="account-card">
-      <h3 style="margin:0 0 8px;font-size:17px;font-weight:600;color:var(--color-text)">Your data</h3>
-      <p style="margin:0 0 14px;font-size:15px" class="quiet">Export it from this page any time. Deleting your account removes what we store on our servers and leaves the copy on your phone alone.</p>
+      <p>Export it from this page any time. Deleting your account removes what we store on our servers and leaves the copy on your phone alone.</p>
       <div class="account-links">
-        <a href="/delete/" class="danger-link" style="text-decoration:none">Delete account</a>
+        <a href="/delete/" class="danger-link">Delete account</a>
         <a href="/privacy/">Privacy</a>
         <a href="/support/">Support</a>
       </div>

@@ -24,6 +24,10 @@ import {
   countsInTotals,
   durationText,
   weekStart,
+  detectPRs,
+  checkPR,
+  isRecord,
+  recordAsOfItsDate,
 } from '../assets/js/dashboard/domain.js';
 import {
   fmt,
@@ -42,7 +46,9 @@ import {
   TRIAL_LINE,
 } from '../assets/js/prices.js';
 import { readFileSync } from 'node:fs';
-import { compareHlc, materialise } from '../assets/js/dashboard/store.js';
+import { compareHlc, materialise, buildModel } from '../assets/js/dashboard/store.js';
+import { row } from './sample-feed.mjs';
+import { historyMonths } from '../assets/js/dashboard/views.js';
 import { buildRows, toCsv, toXlsx } from '../assets/js/dashboard/export.js';
 
 let passed = 0;
@@ -334,6 +340,121 @@ test('a week starts on Monday', () => {
   const wednesday = new Date(2026, 8, 2, 15, 0, 0).getTime();
   const monday = new Date(2026, 7, 31, 0, 0, 0).getTime();
   assert.equal(weekStart(wednesday), monday);
+});
+
+/* ------------------------------------------------ records (series.test.ts) */
+
+const rs = (partial) => ({ setType: 'working', weightMilli: null, reps: 0, ...partial });
+const rsession = (startedAt, sets) => ({ startedAt, sets });
+const flags = (history, assisted = false) =>
+  [...history].sort((a, b) => a.startedAt - b.startedAt).map((s) => isRecord(recordAsOfItsDate(history, s, assisted)));
+
+test('detectPRs finds heaviest weight, best 1RM, and most reps across history', () => {
+  const prs = detectPRs([
+    rsession(300, [rs({ weightMilli: 100_000, reps: 3 })]),
+    rsession(200, [rs({ weightMilli: 90_000, reps: 8 })]),
+    rsession(100, [rs({ weightMilli: 80_000, reps: 5 })]),
+  ]);
+  assert.equal(prs.heaviestWeightMilli, 100_000);
+  assert.equal(prs.bestEstimatedOneRepMaxMilli, 114_000);
+  assert.deepEqual(prs.bestReps, { reps: 8, atWeightMilli: 90_000 });
+});
+
+test('detectPRs ignores warmups', () => {
+  const prs = detectPRs([rsession(100, [rs({ setType: 'warmup', weightMilli: 200_000, reps: 1 }), rs({ weightMilli: 90_000, reps: 5 })])]);
+  assert.equal(prs.heaviestWeightMilli, 90_000);
+});
+
+test('checkPR: a new heaviest, a new rep record, a new estimate; a tie is none', () => {
+  const prior = [rsession(100, [rs({ weightMilli: 80_000, reps: 5 })])];
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 90_000, reps: 3 })] }, false).heaviestWeight, true);
+  const tie = checkPR(prior, { sets: [rs({ weightMilli: 80_000, reps: 5 })] }, false);
+  assert.equal(isRecord(tie), false);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 80_000, reps: 8 })] }, false).reps, true);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 85_000, reps: 5 })] }, false).estimatedOneRepMax, true);
+});
+
+test('checkPR never fires on a first-ever log (D86)', () => {
+  assert.equal(isRecord(checkPR([], { sets: [rs({ weightMilli: 200_000, reps: 12 })] }, false)), false);
+});
+
+test('checkPR on an assisted lift: less help is the record, more never is', () => {
+  const prior = [rsession(100, [rs({ weightMilli: 30_000, reps: 5 })])];
+  assert.deepEqual(checkPR(prior, { sets: [rs({ weightMilli: 25_000, reps: 5 })] }, true), {
+    heaviestWeight: false, leastAssistance: true, estimatedOneRepMax: false, reps: false,
+  });
+  assert.equal(isRecord(checkPR(prior, { sets: [rs({ weightMilli: 40_000, reps: 5 })] }, true)), false);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: 0, reps: 5 })] }, true).leastAssistance, true);
+  assert.equal(checkPR(prior, { sets: [rs({ weightMilli: null, reps: 5 })] }, true).leastAssistance, false);
+});
+
+test('records as of their own date, in order, never the first', () => {
+  assert.deepEqual(flags([
+    rsession(400, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(300, [rs({ weightMilli: 65_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 60_000, reps: 5 })]),
+  ]), [false, true, false, false]);
+});
+
+test('a record is not undone by a later, heavier session', () => {
+  assert.deepEqual(flags([
+    rsession(300, [rs({ weightMilli: 90_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 70_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 60_000, reps: 5 })]),
+  ]), [false, true, true]);
+});
+
+test('an assisted lift reads the other way round', () => {
+  assert.deepEqual(flags([
+    rsession(500, [rs({ weightMilli: 20_000, reps: 7 })]),
+    rsession(400, [rs({ weightMilli: 20_000, reps: 5 })]),
+    rsession(300, [rs({ weightMilli: 20_000, reps: 5 })]),
+    rsession(200, [rs({ weightMilli: 40_000, reps: 5 })]),
+    rsession(100, [rs({ weightMilli: 30_000, reps: 5 })]),
+  ], true), [false, false, true, false, true]);
+});
+
+/* ----------------------------------------- records, through the model */
+
+/* One exercise placed twice in a workout is ONE session of it (records.ts and
+ * the history read fold it), so the chip counts it once, the chart plots it
+ * once, and the gold word lands on the set that carried the weight. */
+function foldedLog() {
+  const day = 86400000;
+  const t0 = new Date(2026, 8, 1, 7).getTime();
+  const rows = [row('exercises', { id: 'x-bench', name: 'Bench press', unit: 'kg', equipmentType: 'barbell', incrementMilli: 2500, isBuiltin: 1, bodyweightSubtype: null })];
+  const workout = (id, startedAt, placements) => {
+    rows.push(row('workouts', { id, title: id, startedAt, endedAt: startedAt + 3600000, notes: null }));
+    placements.forEach((sets, i) => {
+      const we = `${id}-we-${i}`;
+      rows.push(row('workout_exercises', { id: we, workoutId: id, exerciseId: 'x-bench', orderIndex: i, supersetGroupId: null }));
+      sets.forEach(([w, reps, setType = 'working'], j) =>
+        rows.push(row('sets', { id: `${we}-s${j}`, workoutExerciseId: we, orderIndex: j, setType, side: 'both', reps, weightMilli: w })));
+    });
+  };
+  workout('a', t0, [[[100000, 5]]]);
+  workout('b', t0 + 3 * day, [[[100000, 5], [120000, 1, 'warmup']], [[105000, 3]]]);
+  return buildModel(materialise(rows), { cutoff: Infinity });
+}
+
+test('a workout placing one exercise twice is one session of it', () => {
+  const model = foldedLog();
+  assert.equal(model.historyByExercise.get('x-bench').length, 2);
+  assert.equal(model.recordsBySession.get('b'), 1);
+  assert.equal(model.recordsBySession.has('a'), false);
+});
+
+test('the gold word goes on the working set that carried the weight, never a warmup', () => {
+  const model = foldedLog();
+  assert.deepEqual([...model.recordSetIds], ['b-we-1-s0']);
+});
+
+test('History never offers a month after this one', () => {
+  const model = foldedLog();
+  const now = new Date(2026, 7, 20).getTime(); // in August, before both workouts
+  assert.deepEqual(historyMonths(model, now), []);
+  assert.deepEqual(historyMonths(model, new Date(2026, 8, 30).getTime()), ['2026-09']);
 });
 
 /* -------------------------------------------------------------- prices */
